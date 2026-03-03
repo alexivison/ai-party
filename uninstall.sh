@@ -30,12 +30,33 @@ remove_symlink() {
     echo "✓  Removed symlink: ~/.$tool"
 }
 
+remove_file_symlink() {
+    local source="$1"
+    local target="$2"
+    local label="$3"
+
+    if [[ ! -L "$target" ]]; then
+        echo "⏭  Skipping $label (not a symlink)"
+        return
+    fi
+
+    if [[ "$(readlink "$target")" != "$source" ]]; then
+        echo "⏭  Skipping $label (points elsewhere: $(readlink "$target"))"
+        return
+    fi
+
+    rm "$target"
+    echo "✓  Removed symlink: $label"
+}
+
 echo "Removing symlinks..."
 echo ""
 
 for tool in "${TOOLS[@]}"; do
     remove_symlink "$tool"
 done
+
+remove_file_symlink "$SCRIPT_DIR/tmux/tmux.conf" "$HOME/.tmux.conf" "~/.tmux.conf"
 
 echo ""
 echo "Uninstall complete!"

@@ -69,6 +69,27 @@ create_symlink() {
     return 0
 }
 
+create_file_symlink() {
+    local source="$1"
+    local target="$2"
+    local label="$3"
+
+    if [[ ! -f "$source" ]]; then
+        echo "⏭  Skipping $label (source file not found)"
+        return 1
+    fi
+
+    if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+        echo "✓  $label already linked"
+        return 0
+    fi
+
+    backup_existing "$target"
+    ln -s "$source" "$target"
+    echo "✓  Created symlink: $target → $source"
+    return 0
+}
+
 prompt_install() {
     local tool="$1"
     local install_cmd="$2"
@@ -173,6 +194,16 @@ setup_codex() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TMUX
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+setup_tmux() {
+    echo ""
+    echo "━━━ tmux ━━━"
+
+    create_file_symlink "$SCRIPT_DIR/tmux/tmux.conf" "$HOME/.tmux.conf" "tmux config"
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAIN
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if [[ "$SYMLINKS_ONLY" == true ]]; then
@@ -196,6 +227,7 @@ fi
 
 setup_claude
 setup_codex
+setup_tmux
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━"
@@ -208,3 +240,6 @@ for tool in claude codex; do
         echo "  ~/.$tool → $(readlink "$target")"
     fi
 done
+if [[ -L "$HOME/.tmux.conf" ]]; then
+    echo "  ~/.tmux.conf → $(readlink "$HOME/.tmux.conf")"
+fi

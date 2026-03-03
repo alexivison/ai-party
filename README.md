@@ -24,6 +24,7 @@ ai-config/
 ├── codex/           # OpenAI Codex CLI configuration
 ├── shared/          # Skills shared by both platforms
 ├── session/         # tmux party session launcher
+├── tmux/            # tmux configuration
 ├── tests/           # Test suite
 ├── install.sh       # Install CLIs and create symlinks
 ├── uninstall.sh     # Remove symlinks
@@ -45,7 +46,7 @@ cd ~/Code/ai-config
 ```
 
 The installer will:
-1. Create config symlinks (`~/.claude`, `~/.codex`)
+1. Create config symlinks (`~/.claude`, `~/.codex`, `~/.tmux.conf`)
 2. Offer to install missing CLI tools (optional)
 3. Offer to run authentication for each tool (optional)
 
