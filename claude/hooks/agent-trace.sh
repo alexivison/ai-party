@@ -2,7 +2,7 @@
 # Agent Observability Hook
 # Logs sub-agent invocations to ~/.claude/logs/agent-trace.jsonl
 #
-# Triggered: PostToolUse on Task tool
+# Triggered: PostToolUse on Agent tool
 # Input: JSON via stdin with tool_name, tool_input, tool_response
 
 set -e
@@ -25,8 +25,8 @@ if [ -z "$tool_name" ]; then
   exit 0
 fi
 
-# Only process Task tool (sub-agent invocations)
-if [ "$tool_name" != "Task" ]; then
+# Only process Agent tool (sub-agent invocations)
+if [ "$tool_name" != "Agent" ]; then
   exit 0
 fi
 

@@ -26,6 +26,7 @@ if echo "$COMMAND" | grep -qE 'sed\s+-i|awk\s.*-i\s*inplace'; then
     cat << 'GUARD_EOF'
 {
   "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "BLOCKED: Use Edit/Write tools instead of Bash for file modifications. Marker invalidation depends on Edit/Write tool hooks."
   }
@@ -80,6 +81,7 @@ REPO_NAME=$(basename "$GIT_ROOT" 2>/dev/null || echo "repo")
 cat << EOF
 {
   "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "BLOCKED: Branch switching in main worktree. Use: git worktree add ../${REPO_NAME}-<branch> -b <branch>"
   }

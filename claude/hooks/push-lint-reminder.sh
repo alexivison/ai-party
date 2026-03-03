@@ -7,7 +7,11 @@ command=$(echo "$input" | jq -r '.tool_input.command // empty')
 
 [[ "$command" != *"git push"* ]] && exit 0
 
-cat <<'MSG'
-Reminder: have you run the check-runner and test-runner sub-agents for the affected service? If the changes warrant it, run them before pushing.
-MSG
+cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "additionalContext": "Reminder: have you run the check-runner and test-runner sub-agents for the affected service? If the changes warrant it, run them before pushing."
+  }
+}
+EOF
 exit 0

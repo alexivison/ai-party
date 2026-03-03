@@ -30,6 +30,7 @@ if echo "$COMMAND" | grep -qE 'tmux-codex\.sh +--approve'; then
     cat << EOF
 {
   "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "BLOCKED: Codex approve gate — codex-ran marker missing. Run tmux-codex.sh --review-complete first."
   }
@@ -59,6 +60,7 @@ if [ -n "$MISSING" ]; then
   cat << EOF
 {
   "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "BLOCKED: Codex review gate — critic APPROVE markers missing:$MISSING. Re-run critics before codex review."
   }

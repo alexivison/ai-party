@@ -66,6 +66,7 @@ if echo "$COMMAND" | grep -qE 'gh pr create'; then
     cat << EOF
 {
   "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "BLOCKED: PR gate requirements not met. Missing:$MISSING. Complete all workflow steps before creating PR."
   }
