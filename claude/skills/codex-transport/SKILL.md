@@ -38,19 +38,31 @@ After creating a plan:
 `work_dir` is **REQUIRED**. Plan review is advisory — it is intentionally ungated by critic markers and does NOT create or reuse the `codex-ran` approval marker. Codex will notify via `[CODEX] Plan review complete. Findings at: <path>` when done. Findings are TOON format (`.toon` file).
 
 ### Send a task (non-blocking)
+**IMPORTANT:** Prompts with quotes, backticks, or >500 characters risk `unmatched '` shell errors when passed inline. Write to a temp file first:
+```bash
+cat > /tmp/codex-prompt.md << 'EOF'
+Your long prompt here...
+EOF
+~/.claude/skills/codex-transport/scripts/tmux-codex.sh --prompt "$(cat /tmp/codex-prompt.md)" /path/to/repo
+```
+
+Short prompts can be passed directly:
 ```bash
 ~/.claude/skills/codex-transport/scripts/tmux-codex.sh --prompt "<task description>" <work_dir>
 ```
 `work_dir` is **REQUIRED**. Returns immediately. Codex will notify via `[CODEX] Task complete. Response at: <path>` when done. Response is TOON format (`.toon` file).
 
 ### Record review completion evidence
-After Codex notifies you that findings are ready:
+**CRITICAL:** The argument is the **full path to the `.toon` findings file** from the `[CODEX] Review complete. Findings at: <path>` notification — NOT a worktree path. Passing a worktree path will fail with "Findings file not found."
+
 ```bash
 ~/.claude/skills/codex-transport/scripts/tmux-codex.sh --review-complete "<findings_file>"
 ```
 This preserves the existing evidence-chain invariant: `CODEX_REVIEW_RAN` means a completed review, not merely a queued request. The file existence check is extension-agnostic.
 
 ### Signal verdict (after triaging findings)
+**IMPORTANT:** `--re-review` does NOT trigger a fresh Codex review — it only echoes the existing verdict status for hook detection. To get Codex to re-examine code after fixing blocking findings, dispatch a new `--review`, then use `--review-complete` on the new findings file.
+
 ```bash
 # All findings non-blocking — approve
 ~/.claude/skills/codex-transport/scripts/tmux-codex.sh --approve
