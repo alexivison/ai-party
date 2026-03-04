@@ -10,105 +10,50 @@ Extract durable preferences and create/update skills from session feedback or do
 
 ## Modes
 
-| Mode | Trigger | Source |
-|------|---------|--------|
-| **Session** | `/autoskill`, "learn from this session" | Current conversation |
-| **Document** | `/autoskill [url or path]`, "learn from this doc" | Book, article, codebase |
+- **Session** (`/autoskill`) — Learn from current conversation
+- **Document** (`/autoskill [url|path]`) — Learn from external source
 
 ---
 
-# Mode 1: Session Learning
+# Session Learning
 
-Two independent lanes, both on every activation:
+Two lanes run on every activation:
 
-| Lane | Focus |
-|------|-------|
-| **Lane 1: Preferences** | User corrections, patterns, approvals → extract durable preferences |
-| **Lane 2: Flow Violations** | Sequence deviations, illegitimate pauses, stale evidence → audit autonomous flow |
+1. **Preferences** — User corrections, repeated patterns, approvals → durable rules
+2. **Flow Audit** — Sequence deviations, illegitimate pauses, stale evidence (only when workflow detected)
 
-Lane 2 runs only when a workflow was detected (see Workflow Identification). If none detected, skip silently.
+## Lane 1: Preferences
 
-## Lane 1: Preference Signals
+**Signal priority:** Corrections (highest) > Repeated patterns > Approvals (supporting)
 
-### Signal Detection
+Ignore one-offs, ambiguous, or contradictory signals.
 
-| Signal Type | Value |
-|-------------|-------|
-| Corrections | Highest — "No, use X instead of Y" |
-| Repeated patterns | High — same feedback 2+ times |
-| Approvals | Supporting — "Yes, that's right" |
-
-Ignore: one-offs, ambiguous, contradictory signals.
-
-### Quality Filter
-
-Capture if: repeated or stated as general rule, applies to future sessions, specific and actionable, new beyond standard practices.
-
-**Worth capturing:** Project conventions, team preferences, domain terminology, architectural decisions, workflow preferences.
+**Capture when:** repeated or stated as general rule, applies to future sessions, specific and actionable, new beyond standard practices. Think project conventions, architectural decisions, workflow preferences.
 
 **Skip:** General best practices, language/framework conventions, common library usage.
 
-## Lane 2: Flow Violations
+## Lane 2: Flow Audit
 
-### Workflow Identification
+**Detect workflow:** Explicit skill invocation (authoritative) or heuristic — TASK*.md = task-workflow, bug + regression = bugfix-workflow (flag "inferred").
 
-**Tier 1 (authoritative):** Explicit skill invocations (`task-workflow`, `bugfix-workflow`).
+**Expected sequence** (M=mandatory, C=conditional):
 
-**Tier 2 (fallback):** Heuristic — TASK*.md + implementation = task-workflow, bug + regression test = bugfix-workflow. Flag as "inferred."
+```
+/write-tests(C|M) → implement → GREEN → checkboxes(task only) → critics → codex → /pre-pr-verification → commit+PR
+```
 
-### Expected Sequences
+**Checks:**
+1. **Step ordering** (HIGH) — Mandatory steps in order. Legitimate pauses (NEEDS_DISCUSSION, 2-strike cap, user-initiated) are valid terminals.
+2. **Illegitimate pauses** (MED-HIGH) — "Should I continue?", stopping after partial completion without valid reason.
+3. **Evidence freshness** (MED-HIGH) — Code edits after verification invalidate it. No tentative language as proof.
 
-| Step | task | bugfix |
-|------|:----:|:------:|
-| /write-tests | C | M |
-| implement | M | M |
-| GREEN (test-runner) | M | M |
-| checkboxes (TASK+PLAN) | M | -- |
-| code-critic | M | M |
-| minimizer | M | M |
-| codex | M | M |
-| /pre-pr-verification | M | M |
-| commit + PR | M | M |
-
-M = mandatory, C = conditional, -- = N/A
-
-### Violation Checks
-
-**Check 1: Step Ordering & Completeness** (HIGH confidence)
-Verify mandatory steps executed in order. Guard: legitimate pause points (NEEDS_DISCUSSION, 2-strike cap, investigation findings, user-initiated, oscillation detected, iteration cap hit) are valid terminal states — don't flag downstream steps.
-
-**Check 2: Illegitimate Pauses** (MED-HIGH confidence)
-Detect assistant-initiated stops between mandatory steps without valid reason. Signals: "Should I continue?", "Would you like me to...", stopping after partial completion.
-
-**Check 3: Evidence Freshness** (MED-HIGH confidence)
-Code edits after verification invalidate it. Check for claims without fresh evidence, tentative language as verification claim.
-
-### Routing Triage
-
-| Violation Class | Target |
-|-----------------|--------|
-| Behavior drift | Workflow skill SKILL.md |
-| Rule ambiguity | execution-core.md |
-| Enforcement gap | Hook file |
+**Route violations to:** behavior drift → workflow SKILL.md, rule ambiguity → execution-core.md, enforcement gap → hook file.
 
 ---
 
-# Mode 2: Document Learning
+# Document Learning
 
-1. Read source (URL or file)
-2. Extract techniques, methodologies, principles not already in skills
-3. Filter for novelty — skip known/standard content
-4. Propose updates to existing skills or new skill creation
-
----
-
-# Creating New Skills (TDD)
-
-3+ related signals not fitting existing skills → new skill. Follow the `working-with-skills` conventions for format, naming, description writing, and verification.
-
-1. **RED** — Document the gap (problem observed, desired behavior)
-2. **GREEN** — Create minimal skill at `~/.<agent>/skills/<name>/SKILL.md` (path depends on invoking agent: `.claude` or `.codex`). For shared skills: `shared/skills/<name>/` with symlinks to both agents.
-3. **REFACTOR** — Close loopholes, resist scope creep. Run the verification checklist from `working-with-skills`.
+1. Read source → 2. Extract novel techniques/principles → 3. Propose skill updates or new skills
 
 ---
 
@@ -116,54 +61,53 @@ Code edits after verification invalidate it. Check for claims without fresh evid
 
 ```
 Signal about...
-├── Workflow/process → Skill
-├── Agent behavior → Agent definition or agent skill
-├── Code style → Rules
-├── Global preferences → CLAUDE.md
-├── Flow violation → Workflow skill / rule / hook (per routing triage)
-└── Doesn't fit → New skill (TDD)
+├── Workflow/process    → Skill
+├── Agent behavior      → Agent definition or agent skill
+├── Code style          → Rules
+├── Global preferences  → CLAUDE.md
+├── Flow violation      → Workflow skill / rule / hook
+└── Doesn't fit (3+)   → New skill (TDD via working-with-skills)
 ```
+
+---
+
+# New Skills (TDD)
+
+3+ related signals not fitting existing skills → new skill per `working-with-skills`.
+
+1. **RED** — Document gap (problem, desired behavior)
+2. **GREEN** — Minimal skill at `~/.<agent>/skills/<name>/SKILL.md` (shared: `shared/skills/` + symlinks)
+3. **REFACTOR** — Close loopholes, run verification checklist
 
 ---
 
 # Output Format
 
-```markdown
-## Autoskill: [session/document title]
+```
+## Autoskill: [title]
 
 ### Signals
-| # | Type | Quote/Context |
-|---|------|---------------|
+| # | Signal | Context |
+|---|--------|---------|
 
-**Detected:** N updates, N new skills, N flow violations
+Detected: N updates, N new skills, N violations
 
 ### Proposed Updates
-#### ▸ [1] SKILL-NAME — `HIGH`
-**Signal:** "quote"
-**File:** path
-**Current:** > existing text
-**Proposed:** > new text
-**Rationale:** One sentence.
+▸ [1] SKILL-NAME — HIGH
+  Signal: "quote"
+  File: path
+  Current: > existing
+  Proposed: > new
+  Rationale: one sentence
 
-### Flow Adherence Report
-**Workflow(s) detected:** {type | none (skipped)}
-
+### Flow Report (if workflow detected)
 | # | Check | Verdict | Confidence |
 |---|-------|---------|------------|
-| 1 | Step ordering | PASS/VIOLATION | HIGH/MED |
-| 2 | Illegitimate pauses | PASS/VIOLATION | HIGH/MED |
-| 3 | Evidence freshness | PASS/VIOLATION | HIGH/MED/LOW |
 
-**Apply changes?** [all / high-only / selective / none]
+Apply? [all / high-only / selective / none]
 ```
 
-## Confidence Levels
-
-- **HIGH** — Explicit, repeated, or clearly generalizable
-- **MED** — Single instance, appears intentional
-- **LOW** — Lexical match only. Report-only, never propose edits.
-
-Always wait for explicit approval before editing.
+**Confidence:** HIGH (explicit/repeated) · MED (single, intentional) · LOW (lexical only — report, never edit)
 
 ---
 
@@ -172,4 +116,4 @@ Always wait for explicit approval before editing.
 - Never delete rules without instruction
 - Prefer additive changes over rewrites
 - Skip if no actionable signals
-- New skills require RED phase first
+- Always wait for explicit approval before editing
