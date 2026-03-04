@@ -1,6 +1,5 @@
 #!/bin/bash
-# PreToolUse hook: remind to run verification sub-agents before pushing.
-# Non-blocking (exit 0) — serves as a nudge, not a gate.
+# PreToolUse hook: non-blocking reminder to run full checks before pushing.
 
 input=$(cat)
 command=$(echo "$input" | jq -r '.tool_input.command // empty')
@@ -10,7 +9,7 @@ command=$(echo "$input" | jq -r '.tool_input.command // empty')
 cat <<'EOF'
 {
   "hookSpecificOutput": {
-    "additionalContext": "Reminder: have you run the check-runner and test-runner sub-agents for the affected service? If the changes warrant it, run them before pushing."
+    "additionalContext": "STOP. Before pushing you MUST have run the FULL check suite (typecheck + lint + tests) via check-runner and test-runner sub-agents. Not partially, not just lint — the full suite. If you have not, abort this push and run them now."
   }
 }
 EOF
