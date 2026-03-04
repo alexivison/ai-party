@@ -275,9 +275,10 @@ party_pick_entries() {
 
   if [[ -n "$live_sessions" ]]; then
     while IFS= read -r name; do
-      local cwd
+      local cwd title
       cwd="$(party_state_get_field "$name" "cwd" 2>/dev/null || true)"
-      printf '%s\tactive\t%s\n' "$name" "$(_party_short_path "${cwd:--}")"
+      title="$(party_state_get_field "$name" "title" 2>/dev/null || true)"
+      printf '%s\tactive\t%s\t%s\n' "$name" "${title:--}" "$(_party_short_path "${cwd:--}")"
     done <<< "$live_sessions"
   fi
 
@@ -295,11 +296,12 @@ party_pick_entries() {
 
     if [[ ${#stale_files[@]} -gt 0 ]]; then
       while IFS= read -r f; do
-        local sid cwd ts
+        local sid cwd title ts
         sid="$(basename "$f" .json)"
         cwd="$(jq -r '.cwd // "-"' "$f" 2>/dev/null || echo "-")"
+        title="$(jq -r '.title // empty' "$f" 2>/dev/null || true)"
         ts="$(jq -r '.last_started_at // .created_at // "-"' "$f" 2>/dev/null || echo "-")"
-        printf '%s\t%s\t%s\n' "$sid" "$(_party_short_ts "$ts")" "$(_party_short_path "$cwd")"
+        printf '%s\t%s\t%s\t%s\n' "$sid" "$(_party_short_ts "$ts")" "${title:--}" "$(_party_short_path "$cwd")"
       done < <(printf '%s\0' "${stale_files[@]}" | xargs -0 ls -t)
     fi
   fi
@@ -325,7 +327,7 @@ party_pick() {
   local selected
   selected="$(printf '%s\n' "$entries" | fzf \
     --delimiter='\t' \
-    --with-nth=1,2,3 \
+    --with-nth=1,2,3,4 \
     --header='enter:resume  ctrl-d:delete  esc:cancel' \
     --no-info \
     --reverse \
