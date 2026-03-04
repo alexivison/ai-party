@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # party.sh — Launch or resume a tmux session with Claude (Paladin) and Codex (Wizard)
-# Usage: party.sh [--raw] [--resume-claude ID] [--resume-codex ID] [TITLE]
+# Usage: party.sh [--resume-claude ID] [--resume-codex ID] [TITLE]
 #        party.sh --continue <party-id> | --stop [name] | --list | --install-tpm
 set -euo pipefail
 
@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/party-lib.sh"
 party_usage() {
   cat <<'EOF'
 Usage:
-  party.sh [--raw] [--resume-claude ID] [--resume-codex ID] [TITLE]
+  party.sh [--resume-claude ID] [--resume-codex ID] [TITLE]
   party.sh --continue <party-id>
   party.sh continue <party-id>
   party.sh --stop [name]
@@ -45,18 +45,8 @@ party_install_tpm() {
   echo "In tmux, press Prefix + I to install plugins."
 }
 
-party_use_cc() {
-  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" && "${PARTY_RAW:-}" != "1" ]]; then
-    return 0
-  fi
-  return 1
-}
-
 party_attach() {
   local session="${1:?Usage: party_attach SESSION_NAME}"
-  if party_use_cc; then
-    exec tmux -CC attach -t "$session"
-  fi
   exec tmux attach -t "$session"
 }
 
@@ -170,6 +160,7 @@ party_start() {
   codex_bin="${CODEX_BIN:-$(command -v codex 2>/dev/null || echo "/opt/homebrew/bin/codex")}"
   agent_path="$HOME/.local/bin:/opt/homebrew/bin:${PATH:-/usr/bin:/bin}"
 
+  party_prune_manifests
   state_dir="$(ensure_party_state_dir "$session")"
   party_state_upsert_manifest "$session" "$title" "$session_cwd" "$window_name" "$claude_bin" "$codex_bin" "$agent_path" || true
   party_state_set_field "$session" "last_started_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
@@ -281,23 +272,78 @@ party_stop() {
   done <<< "$sessions"
 }
 
-party_list() {
-  local sessions
-  sessions=$(tmux ls -F '#{session_name}' 2>/dev/null | grep '^party-' || true)
+party_prune_manifests() {
+  local max_age_days="${PARTY_PRUNE_DAYS:-7}"
+  local manifest_dir
+  manifest_dir="$(party_state_root)"
+  [[ -d "$manifest_dir" ]] || return 0
 
-  if [[ -z "$sessions" ]]; then
-    echo "No active party sessions."
-    return 0
+  # Delete manifests older than max_age_days, skip any with a live tmux session
+  local live_sessions
+  live_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null | grep '^party-' || true)
+
+  local pruned=0
+  while IFS= read -r -d '' f; do
+    local sid
+    sid="$(basename "$f" .json)"
+    if [[ -n "$live_sessions" ]] && grep -qxF "$sid" <<< "$live_sessions"; then
+      continue
+    fi
+    rm -f "$f" && pruned=$((pruned + 1))
+  done < <(find "$manifest_dir" -name 'party-*.json' -mtime +"$max_age_days" -print0 2>/dev/null)
+  if [[ $pruned -gt 0 ]]; then
+    echo "Pruned $pruned party manifest(s) older than $max_age_days days."
+  fi
+}
+
+party_list() {
+  local live_sessions manifest_dir stale=()
+  live_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null | grep '^party-' || true)
+  manifest_dir="$(party_state_root)"
+
+  # Show live tmux sessions
+  if [[ -n "$live_sessions" ]]; then
+    echo "Active:"
+    while IFS= read -r name; do
+      local cwd title
+      cwd="$(party_state_get_field "$name" "cwd" 2>/dev/null || true)"
+      title="$(party_state_get_field "$name" "title" 2>/dev/null || true)"
+      printf '  %s  %s  %s\n' "$name" "${title:+($title)}" "${cwd:-}"
+    done <<< "$live_sessions"
   fi
 
-  echo "Active party sessions:"
-  while IFS= read -r name; do
-    echo "  $name"
-  done <<< "$sessions"
+  # Show resumable manifests (not currently live)
+  if [[ -d "$manifest_dir" ]]; then
+    for f in "$manifest_dir"/party-*.json; do
+      [[ -f "$f" ]] || continue
+      local sid
+      sid="$(basename "$f" .json)"
+      if [[ -n "$live_sessions" ]] && grep -qxF "$sid" <<< "$live_sessions"; then
+        continue
+      fi
+      stale+=("$f")
+    done
+
+    if [[ ${#stale[@]} -gt 0 ]]; then
+      echo "Resumable (--continue <id>):"
+      # Sort by modification time, newest first; show last 10
+      printf '%s\0' "${stale[@]}" | xargs -0 ls -t | head -10 | while IFS= read -r f; do
+        local sid cwd title ts
+        sid="$(basename "$f" .json)"
+        cwd="$(jq -r '.cwd // empty' "$f" 2>/dev/null || true)"
+        title="$(jq -r '.title // empty' "$f" 2>/dev/null || true)"
+        ts="$(jq -r '.last_started_at // .created_at // empty' "$f" 2>/dev/null || true)"
+        printf '  %s  %s  %s  %s\n' "$sid" "${ts:+[$ts]}" "${title:+($title)}" "${cwd:-}"
+      done
+    fi
+  fi
+
+  if [[ -z "$live_sessions" && ${#stale[@]} -eq 0 ]]; then
+    echo "No party sessions found."
+  fi
 }
 
 # Parse arguments
-_party_raw=""
 _party_resume_claude=""
 _party_resume_codex=""
 _party_title=""
@@ -309,7 +355,6 @@ while [[ $# -gt 0 ]]; do
     --list)  party_list; exit ;;
     --continue|continue) party_continue "${2:-}"; exit ;;
     --help|-h) party_usage; exit ;;
-    --raw)   _party_raw=1; shift ;;
     --resume-claude) _party_resume_claude="${2:?--resume-claude requires a session ID}"; shift 2 ;;
     --resume-codex)  _party_resume_codex="${2:?--resume-codex requires a session ID}"; shift 2 ;;
     --*)     party_usage >&2; exit 1 ;;
@@ -317,4 +362,4 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PARTY_RAW="${_party_raw}" party_start "$_party_title" "$_party_resume_claude" "$_party_resume_codex"
+party_start "$_party_title" "$_party_resume_claude" "$_party_resume_codex"

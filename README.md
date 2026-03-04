@@ -89,10 +89,9 @@ Transport scripts (`tmux-codex.sh`, `tmux-claude.sh`) route messages by `@party_
 
 | Flag | Description |
 |------|-------------|
-| *(none)* | Start a new party session (iTerm2 control mode auto-detected) |
-| `--raw` | Start without iTerm2 control mode |
+| *(none)* | Start a new party session |
 | `--continue <party-id>` | Recreate a party session and resume Claude/Codex using persisted session IDs |
-| `--list` | List active party sessions |
+| `--list` | List active and resumable party sessions |
 | `--stop [name]` | Stop one or all party sessions |
 | `--install-tpm` | Install tmux Plugin Manager |
 
