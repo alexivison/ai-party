@@ -164,6 +164,29 @@ party_state_get_field() {
   jq -r --arg key "$key" '.[$key] // empty' "$file" 2>/dev/null
 }
 
+party_state_delete_field() {
+  local session="${1:?Usage: party_state_delete_field SESSION KEY}"
+  local key="${2:?Missing key}"
+
+  command -v jq >/dev/null 2>&1 || return 0
+
+  local file
+  file="$(party_state_file "$session")"
+  [[ -f "$file" ]] || return 0
+
+  local tmp now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+
+  jq --arg key "$key" --arg now "$now" \
+    'del(.[$key]) | .updated_at = $now' "$file" > "$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
+
+  mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+}
+
 # Discovers the party session this script is running inside.
 # Uses $TMUX env var to self-discover — no global pointer file needed.
 # Sets SESSION_NAME and STATE_DIR. Returns 1 if not inside a party session.
