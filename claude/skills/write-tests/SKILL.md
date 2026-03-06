@@ -21,9 +21,14 @@ Write appropriate tests based on code characteristics and Testing Trophy princip
 ## Workflow
 
 1. **Read target code** and understand its responsibilities
-2. **Check existing patterns** — find similar tests in the codebase for conventions
+2. **Check existing patterns** — find 2-3 similar test files in the codebase and note:
+   - File location pattern (co-located `.test.ts` / `__tests__/` / `_test.go` in same package)
+   - Test runner and assertion library (Vitest, Jest, testify, stdlib)
+   - Mock strategy (MSW, `vi.mock`, interface mocks, test containers)
+   - Shared helpers, custom render functions, or fixture factories already in use
+   - Naming style (`describe`/`it` labels, table-driven naming)
 3. **Consult reference docs** for test type selection, patterns, and tooling
-4. **Write tests** at the appropriate granularity
+4. **Write tests** at the appropriate granularity, matching discovered conventions
 
 ## Core Principles
 
@@ -33,6 +38,15 @@ Write appropriate tests based on code characteristics and Testing Trophy princip
 - **Test behavior, not implementation**
 - **Keep tests in the same PR as implementation**
 - **Feature flags need dual-path tests**: Verify flag ON behavior and flag OFF parity with pre-implementation behavior
+
+## Test Scope Calibration
+
+Cover the **happy path + each distinct error/rejection path + boundary cases for complex logic**. That means:
+
+- **Pure function** — happy path, each error return, edge inputs (empty, zero, nil). Usually 3-8 cases in a table-driven test.
+- **Service/use-case** — one test per meaningful orchestration path (success, each failure mode from dependencies). Skip paths already covered by unit tests on the domain model.
+- **Component** — renders correctly, each user interaction that changes output, loading/error states. Skip re-testing logic that lives in a hook or utility already under unit test.
+- **API handler** — valid request → 200, each validation failure → 4xx, auth failure → 401/403. Don't duplicate business logic tests from the service layer.
 
 ## Running Tests
 

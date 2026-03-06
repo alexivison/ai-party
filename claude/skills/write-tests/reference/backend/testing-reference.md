@@ -99,6 +99,13 @@ mockRepo := &MockUserRepository{
 service := NewUserService(mockRepo)
 ```
 
+### HTTP Handler & Middleware Tests
+
+Use `httptest.NewRequest` + `httptest.NewRecorder` to test handlers without a real server.
+For handler-level tests, inject mock dependencies directly. For router-level tests (path params, middleware chain), mount the full router via `setupRouter()`.
+
+Test middleware in isolation: wrap a no-op `http.HandlerFunc`, call `middleware.ServeHTTP(rec, req)`, assert on status code and whether the inner handler was reached.
+
 ### Integration Tests with Containers
 
 For database tests:
@@ -111,6 +118,14 @@ Benefits:
 - Real database behavior
 - Isolated per test run
 - No shared state issues
+
+### Build Tags for Integration Tests
+
+Use `//go:build integration` to separate slow tests. Default `go test ./...` runs only unit tests; `go test -tags=integration ./...` includes integration tests. Use for anything requiring external services.
+
+### Testing Concurrent Code
+
+For goroutine-spawning code, synchronize with channels + `select`/`time.After` timeout (not `time.Sleep`). Always run `-race` in CI: `go test -race ./...`
 
 ---
 
@@ -142,6 +157,10 @@ Use diff-based comparison for complex structs:
 - Shows exactly what differs
 - Supports ignoring fields (timestamps, IDs)
 - Better than manual field-by-field checks
+
+### Testify
+
+When the project uses `testify`: `require` for preconditions (stops test on failure — use when subsequent lines depend on success), `assert` for the actual assertions (logs failure, continues). Example: `require.NoError(t, err)` then `assert.Equal(t, expected, result)`.
 
 ---
 
