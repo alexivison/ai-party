@@ -18,39 +18,25 @@ Skip silently (proceed Codex-only) if `CLAUDE_TEAM_REVIEW` is not `1`.
 
 ## Spawn
 
-**CRITICAL: Do NOT use the Agent tool.** Agent Teams teammates are NOT sub-agents. The `Agent` tool does not support `subagent_type: "teammate"` — using it silently falls back to a regular sub-agent.
+### How Agent Teams work
 
-Agent Teams teammates are spawned via **natural language**. Tell Claude to create a teammate directly:
+Agent Teams is a **native Claude Code runtime capability** — the lead session (you) creates teams and the runtime spawns separate Claude Code instances as teammates. This is NOT the Agent tool. The Agent tool creates sub-agents, not teammates. Using the Agent tool here silently creates a duplicate sub-agent alongside the teammate, wasting tokens.
 
-> Spawn an adversarial reviewer teammate to stress-test my code changes. The teammate should review the diff and report findings. Use in-process display mode.
+To spawn a teammate: express the intent to create a team in your response text. The runtime handles the rest. Do not use any tool call.
 
-Before spawning, prepare the context the teammate will need:
+### Steps
 
 1. Run `git diff "$(git merge-base HEAD main)"` and save the output
 2. Identify in-scope and out-of-scope files from the TASK
+3. Create the team by requesting it in your response (no tool call):
 
-Then request the teammate with the full review prompt:
+Create an agent team with one teammate in in-process mode: an adversarial code reviewer.
 
-> Create an agent team with one teammate: an adversarial code reviewer.
->
-> Here is the diff to review:
-> <paste diff>
->
-> In-scope: <files from TASK>
-> Out-of-scope: <everything else>
->
-> The reviewer should focus on:
-> - Failure modes and error paths
-> - Edge cases the tests don't cover
-> - Input validation gaps
-> - Race conditions and state corruption
-> - Security surface (injection, privilege escalation, data leakage)
->
-> Output: max 20 lines, with `file:line` references.
-> Classify each finding: `[must]` (correctness/security) or `[should]` (robustness).
-> If no issues: return APPROVE.
->
-> After the reviewer finishes, clean up the team.
+Give the teammate this prompt:
+- The diff to review (from step 1)
+- In-scope and out-of-scope files (from step 2)
+- Focus areas: failure modes, untested edge cases, input validation gaps, race conditions, security surface (injection, privilege escalation, data leakage)
+- Output format: max 20 lines, `file:line` references, findings classified as `[must]` (correctness/security) or `[should]` (robustness). If no issues: APPROVE.
 
 ## After Spawning
 
