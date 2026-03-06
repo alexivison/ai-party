@@ -41,3 +41,6 @@ scripts/*.plist
 
 # MCP auth cache
 mcp-needs-auth-cache.json
+
+# Skill-creator evaluation workspaces
+skills/*-workspace/
