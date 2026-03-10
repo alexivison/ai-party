@@ -342,14 +342,12 @@ _party_fzf_select() {
   manifest_root="$(party_state_root)"
   preview_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/party-preview.sh"
 
-  printf '%s\n' "$entries" | fzf \
+  printf '%s\n' "$entries" | column -t -s $'\t' | fzf \
     --ansi \
-    --delimiter='\t' \
-    --with-nth=1,2,3,4 \
     --header="$header" \
     --no-info \
     --reverse \
-    --preview="bash \"$preview_script\" {1} \"$manifest_root\" \"$HOME\"" \
+    --preview="bash \"$preview_script\" \$(echo {1} | cut -d\" \" -f1) \"$manifest_root\" \"$HOME\"" \
     --preview-window=right:40% \
     "$@"
 }
@@ -372,10 +370,10 @@ party_pick() {
 
   local selected
   selected="$(_party_fzf_select "$entries" "enter:resume  ctrl-d:delete  esc:cancel" \
-    --bind="ctrl-d:execute(echo {} | cut -f1 | xargs -I{} bash \"$script_path\" --delete {})+reload(bash \"$script_path\" --pick-entries)" \
+    --bind="ctrl-d:execute(echo {} | awk '{print $1}' | xargs -I{} bash \"$script_path\" --delete {})+reload(bash \"$script_path\" --pick-entries)" \
   )" || return 1
 
-  echo "$selected" | cut -f1
+  echo "$selected" | awk '{print $1}'
 }
 
 party_switch() {
@@ -396,7 +394,7 @@ party_switch() {
   selected="$(_party_fzf_select "$entries" "enter:switch  esc:cancel")" || return 1
 
   local target
-  target="$(echo "$selected" | cut -f1)"
+  target="$(echo "$selected" | awk '{print $1}')"
   party_attach "$target"
 }
 
