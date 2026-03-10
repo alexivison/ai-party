@@ -319,6 +319,8 @@ try:
                 continue
             if not isinstance(entry, dict):
                 continue
+            if entry.get('event') != 'stop':
+                continue
             ts = entry.get('timestamp', '')
             if ts < since or ts >= until_date:
                 continue
