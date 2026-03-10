@@ -76,14 +76,45 @@ if [ "$GIT_ROOT" != "$MAIN_WORKTREE" ]; then
     exit 0
 fi
 
-# Block with proper JSON deny format
+# Rewrite: branch switch → worktree add
 REPO_NAME=$(basename "$GIT_ROOT" 2>/dev/null || echo "repo")
-cat << EOF
+
+# Extract target branch from: git checkout [-b] <branch> | git switch [-c] <branch>
+# Strip flags first, then take the last token as the branch name.
+BRANCH=$(echo "$COMMAND" | sed -E 's/git\s+(checkout|switch)\s+//' | sed -E 's/-(b|c|B|C)\s+//' | awk '{print $NF}')
+
+if [ -z "$BRANCH" ]; then
+  # Can't determine branch — fall back to deny
+  cat << 'GUARD_EOF'
 {
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: Branch switching in main worktree. Use: git worktree add ../${REPO_NAME}-<branch> -b <branch>"
+    "permissionDecisionReason": "BLOCKED: Could not parse branch name from checkout/switch command in main worktree."
+  }
+}
+GUARD_EOF
+  exit 0
+fi
+
+WORKTREE_PATH="../${REPO_NAME}-${BRANCH}"
+
+# Determine if this is a new branch (-b/-c flag) or existing
+if echo "$COMMAND" | grep -qE '\s-(b|c|B|C)\s'; then
+  REWRITTEN="git worktree add ${WORKTREE_PATH} -b ${BRANCH} && cd ${WORKTREE_PATH}"
+else
+  REWRITTEN="git worktree add ${WORKTREE_PATH} ${BRANCH} && cd ${WORKTREE_PATH}"
+fi
+
+cat << EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "Rewrote branch switch to worktree: ${BRANCH} → ${WORKTREE_PATH}",
+    "updatedInput": {
+      "command": "${REWRITTEN}"
+    }
   }
 }
 EOF
