@@ -45,8 +45,8 @@ if tmux has-session -t "$sid" 2>/dev/null; then
     echo ""
     echo "${blue}--- Paladin ---${reset}"
     tmux capture-pane -t "$sid:0.$cp" -p -S -500 2>/dev/null \
-      | grep -E '^[❯⏺]' \
-      | grep -vE '^[❯⏺][[:space:]]*$' \
+      | { grep -E '^[❯⏺]' || true; } \
+      | { grep -vE '^[❯⏺][[:space:]]*$' || true; } \
       | tail -8 \
       | while IFS= read -r line; do
           if [[ "$line" == ❯* ]]; then

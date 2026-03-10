@@ -388,7 +388,7 @@ party_switch() {
   entries="$(party_pick_entries 1)"
   if [[ -z "$entries" ]]; then
     echo "No active parties."
-    read -r -s -n 1
+    [[ -t 0 ]] && read -r -s -n 1
     return 1
   fi
 
