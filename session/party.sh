@@ -74,8 +74,12 @@ configure_party_theme() {
 
 party_set_cleanup_hook() {
   local session="${1:?Usage: party_set_cleanup_hook SESSION_NAME}"
+  local state_root lib_path
+  state_root="$(party_state_root)"
+  lib_path="$SCRIPT_DIR/party-lib.sh"
+  # On session close: deregister from parent (if worker), remove runtime + manifest
   tmux set-hook -t "$session" session-closed \
-    "run-shell 'rm -rf /tmp/$session'"
+    "run-shell 'source $lib_path 2>/dev/null && { p=\$(party_state_get_field $session parent_session 2>/dev/null); [ -n \"\$p\" ] && party_state_remove_worker \"\$p\" $session 2>/dev/null; }; rm -rf /tmp/$session; rm -f $state_root/$session.json'"
 }
 
 party_launch_agents() {
