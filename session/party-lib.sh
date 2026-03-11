@@ -37,6 +37,31 @@ party_attach() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Portable file locking (used by all manifest write operations)
+# ---------------------------------------------------------------------------
+
+# Acquire a lock via atomic mkdir. Returns 0 on success, 1 on timeout (~10s).
+_party_lock() {
+  local lockdir="$1"
+  local max_attempts=100  # 100 × 0.1s = 10s timeout
+  local attempts=0
+
+  while ! mkdir "$lockdir" 2>/dev/null; do
+    if [[ $attempts -ge $max_attempts ]]; then
+      return 1
+    fi
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  return 0
+}
+
+_party_unlock() {
+  local lockdir="$1"
+  rmdir "$lockdir" 2>/dev/null || true
+}
+
 # Persist launch metadata for a party session. JSON persistence is best-effort:
 # if jq is unavailable, runtime behavior still works, but resume metadata is skipped.
 party_state_upsert_manifest() {
@@ -56,7 +81,10 @@ party_state_upsert_manifest() {
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   mkdir -p "$root"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+  local lockdir="${file}.lock"
+  local tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+
+  _party_lock "$lockdir" || { rm -f "$tmp"; return 1; }
 
   if [[ -f "$file" ]]; then
     jq --arg session "$session" \
@@ -79,6 +107,7 @@ party_state_upsert_manifest() {
       | .agent_path = $path
       ' "$file" > "$tmp" || {
       rm -f "$tmp"
+      _party_unlock "$lockdir"
       return 1
     }
   else
@@ -105,11 +134,13 @@ party_state_upsert_manifest() {
       }
       ' > "$tmp" || {
       rm -f "$tmp"
+      _party_unlock "$lockdir"
       return 1
     }
   fi
 
   mv "$tmp" "$file"
+  _party_unlock "$lockdir"
 }
 
 party_state_set_field() {
@@ -125,7 +156,10 @@ party_state_set_field() {
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   mkdir -p "$root"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+  local lockdir="${file}.lock"
+  local tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+
+  _party_lock "$lockdir" || { rm -f "$tmp"; return 1; }
 
   if [[ -f "$file" ]]; then
     jq --arg session "$session" \
@@ -139,6 +173,7 @@ party_state_set_field() {
       | .[$key] = $value
       ' "$file" > "$tmp" || {
       rm -f "$tmp"
+      _party_unlock "$lockdir"
       return 1
     }
   else
@@ -156,11 +191,13 @@ party_state_set_field() {
       | .[$key] = $value
       ' > "$tmp" || {
       rm -f "$tmp"
+      _party_unlock "$lockdir"
       return 1
     }
   fi
 
   mv "$tmp" "$file"
+  _party_unlock "$lockdir"
 }
 
 party_state_get_field() {
@@ -173,6 +210,80 @@ party_state_get_field() {
   command -v jq >/dev/null 2>&1 || return 1
 
   jq -r --arg key "$key" '.[$key] // empty' "$file" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# Master mode helpers
+# ---------------------------------------------------------------------------
+
+# Returns 0 if the session is a master session (session_type == "master").
+party_is_master() {
+  local session="${1:?Usage: party_is_master SESSION}"
+  local st
+  st="$(party_state_get_field "$session" "session_type" 2>/dev/null || true)"
+  [[ "$st" == "master" ]]
+}
+
+# Add a worker to a master's workers array. Deduplicates. Locked.
+party_state_add_worker() {
+  local master="${1:?Usage: party_state_add_worker MASTER WORKER}"
+  local worker="${2:?Missing worker}"
+  local file lockdir tmp
+
+  file="$(party_state_file "$master")"
+  [[ -f "$file" ]] || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+
+  lockdir="${file}.lock"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+
+  _party_lock "$lockdir" || {
+    rm -f "$tmp"
+    return 1
+  }
+
+  jq --arg w "$worker" '.workers = ((.workers // []) + [$w] | unique)' "$file" > "$tmp" && mv "$tmp" "$file"
+  local rc=$?
+
+  _party_unlock "$lockdir"
+  return $rc
+}
+
+# Remove a worker from a master's workers array. Locked.
+party_state_remove_worker() {
+  local master="${1:?Usage: party_state_remove_worker MASTER WORKER}"
+  local worker="${2:?Missing worker}"
+  local file lockdir tmp
+
+  file="$(party_state_file "$master")"
+  [[ -f "$file" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+
+  lockdir="${file}.lock"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/party-state.XXXXXX")"
+
+  _party_lock "$lockdir" || {
+    rm -f "$tmp"
+    return 1
+  }
+
+  jq --arg w "$worker" '.workers = ((.workers // []) - [$w])' "$file" > "$tmp" && mv "$tmp" "$file"
+  local rc=$?
+
+  _party_unlock "$lockdir"
+  return $rc
+}
+
+# Print worker IDs from a master's manifest, one per line.
+party_state_get_workers() {
+  local master="${1:?Usage: party_state_get_workers MASTER}"
+  local file
+
+  file="$(party_state_file "$master")"
+  [[ -f "$file" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+
+  jq -r '.workers // [] | .[]' "$file" 2>/dev/null
 }
 
 # Discovers the party session this script is running inside.
