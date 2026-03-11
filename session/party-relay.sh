@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# party-relay.sh — Send messages to worker sessions from a master session.
+# party-relay.sh — Communication between master and worker sessions.
 # Usage:
 #   party-relay.sh <worker-id> "message"          # relay to one worker
 #   party-relay.sh --broadcast "message"           # broadcast to all workers
+#   party-relay.sh --read <worker-id> [--lines N]  # read worker's Claude pane
+#   party-relay.sh --report "message"              # worker reports back to master
 #   party-relay.sh --list                          # list workers + status
 #   party-relay.sh --stop <worker-id>              # stop a worker
 #   party-relay.sh --spawn [--prompt "..."] "title" # spawn a new worker
@@ -16,6 +18,8 @@ relay_usage() {
 Usage:
   party-relay.sh <worker-id> "message"
   party-relay.sh --broadcast "message"
+  party-relay.sh --read <worker-id> [--lines N]
+  party-relay.sh --report "message"
   party-relay.sh --list
   party-relay.sh --stop <worker-id>
   party-relay.sh --spawn [--prompt "text"] "title"
@@ -98,6 +102,55 @@ relay_list() {
   done <<< "$workers"
 }
 
+relay_read() {
+  local worker="${1:?Missing worker ID}"
+  local lines="${2:-50}"
+
+  if ! tmux has-session -t "$worker" 2>/dev/null; then
+    echo "Error: worker session '$worker' is not running." >&2
+    return 1
+  fi
+
+  local target
+  target="$(party_role_pane_target "$worker" "claude" 2>/dev/null)" || {
+    echo "Error: cannot find Claude pane in worker '$worker'." >&2
+    return 1
+  }
+
+  tmux capture-pane -t "$target" -p -S "-$lines" 2>/dev/null
+}
+
+relay_report() {
+  local message="${1:?Missing message}"
+
+  # Discover our own session
+  discover_session || {
+    echo "Error: must be run inside a party session." >&2
+    return 1
+  }
+
+  # Find parent master from manifest
+  local parent
+  parent="$(party_state_get_field "$SESSION_NAME" "parent_session" 2>/dev/null || true)"
+  if [[ -z "$parent" ]]; then
+    echo "Error: session '$SESSION_NAME' has no parent_session — not a worker." >&2
+    return 1
+  fi
+
+  if ! tmux has-session -t "$parent" 2>/dev/null; then
+    echo "Error: master session '$parent' is not running." >&2
+    return 1
+  fi
+
+  local target
+  target="$(party_role_pane_target "$parent" "claude" 2>/dev/null)" || {
+    echo "Error: cannot find Claude pane in master '$parent'." >&2
+    return 1
+  }
+
+  tmux_send "$target" "[WORKER:$SESSION_NAME] $message" "report"
+}
+
 relay_spawn() {
   local prompt=""
   local title=""
@@ -127,6 +180,20 @@ case "$1" in
   --broadcast)
     relay_discover_master
     relay_broadcast "${2:?--broadcast requires a message}"
+    ;;
+  --read)
+    shift
+    local _read_worker="${1:?--read requires a worker ID}"
+    local _read_lines=50
+    shift
+    if [[ "${1:-}" == "--lines" ]]; then
+      _read_lines="${2:?--lines requires a number}"
+      shift 2
+    fi
+    relay_read "$_read_worker" "$_read_lines"
+    ;;
+  --report)
+    relay_report "${2:?--report requires a message}"
     ;;
   --list)
     relay_discover_master

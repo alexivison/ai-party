@@ -98,6 +98,9 @@ Run /<skill> on this issue.
 **Priority:** <priority>
 
 Work in the repo at <absolute-cwd>.
+
+When done, report completion to the master:
+~/Code/ai-config/session/party-relay.sh --report "done: <one-line summary of what was completed>"
 ```
 
 For file-based items:
