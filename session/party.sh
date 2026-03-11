@@ -285,7 +285,7 @@ _party_short_ts() {
 party_pick_entries() {
   local active_only="${1:-0}"
   local live_sessions manifest_dir
-  live_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null | grep '^party-' || true)
+  live_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null | grep '^party-' | sort -r || true)
   manifest_dir="$(party_state_root)"
 
   local current_session
@@ -320,6 +320,8 @@ party_pick_entries() {
     done
 
     if [[ ${#stale_files[@]} -gt 0 ]]; then
+      # Separator between active and resumable sections
+      [[ -n "$live_sessions" ]] && printf '\033[38;2;99;110;123m── resumable ──────────────────────────────\033[0m\n'
       while IFS= read -r f; do
         local sid cwd title ts
         sid="$(basename "$f" .json)"
@@ -370,7 +372,7 @@ party_pick() {
 
   local selected
   selected="$(_party_fzf_select "$entries" "enter:resume  ctrl-d:delete  esc:cancel" \
-    --bind="ctrl-d:execute(echo {} | awk '{print $1}' | xargs -I{} bash \"$script_path\" --delete {})+reload(bash \"$script_path\" --pick-entries)" \
+    --bind="ctrl-d:execute(echo {} | grep -qv 'current' && echo {} | awk '{print \$1}' | xargs -I{} bash \"$script_path\" --delete {} || true)+reload(bash \"$script_path\" --pick-entries)" \
   )" || return 1
 
   echo "$selected" | awk '{print $1}'
@@ -383,19 +385,32 @@ party_switch() {
   fi
 
   local entries
-  entries="$(party_pick_entries 1)"
+  entries="$(party_pick_entries)"
   if [[ -z "$entries" ]]; then
-    echo "No active parties."
+    echo "No party sessions found."
     [[ -t 0 ]] && read -r -s -n 1
     return 1
   fi
 
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/party.sh"
+
   local selected
-  selected="$(_party_fzf_select "$entries" "enter:switch  esc:cancel")" || return 1
+  selected="$(_party_fzf_select "$entries" "enter:switch/resume  ctrl-d:delete  esc:cancel" \
+    --bind="ctrl-d:execute(echo {} | grep -qv 'current' && echo {} | awk '{print \$1}' | xargs -I{} bash \"$script_path\" --delete {} || true)+reload(bash \"$script_path\" --pick-entries)" \
+  )" || return 1
 
   local target
   target="$(echo "$selected" | awk '{print $1}')"
-  party_attach "$target"
+
+  # Ignore separator line selection
+  [[ "$target" =~ ^party- ]] || return 0
+
+  if tmux has-session -t "$target" 2>/dev/null; then
+    party_attach "$target"
+  else
+    party_continue "$target"
+  fi
 }
 
 party_stop() {
