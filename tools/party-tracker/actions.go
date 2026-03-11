@@ -53,9 +53,9 @@ func spawnWorker(masterID, title string) error {
 	return cmd.Run()
 }
 
-// stopWorker stops a worker session.
+// stopWorker destroys a worker session (kills tmux session + removes manifest).
 func stopWorker(workerID string) error {
-	cmd := exec.Command("bash", sessionScript("party.sh"), "--stop", workerID)
+	cmd := exec.Command("bash", sessionScript("party.sh"), "--delete", workerID)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

@@ -230,9 +230,11 @@ func (m model) View() string {
 			line := fmt.Sprintf("%s%s  %s", cursor, nameStyle.Render(title), status)
 			b.WriteString(line + "\n")
 
-			// Snippet
+			// Snippet (may be multi-line)
 			if w.Snippet != "" {
-				b.WriteString(snippetStyle.Render(w.Snippet) + "\n")
+				for _, sline := range strings.Split(w.Snippet, "\n") {
+					b.WriteString(snippetStyle.Render(sline) + "\n")
+				}
 			}
 
 			b.WriteString("\n")

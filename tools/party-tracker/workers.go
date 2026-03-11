@@ -85,7 +85,7 @@ func fetchWorkers(masterID string) []Worker {
 	return workers
 }
 
-// captureSnippet grabs the last meaningful line from the Claude pane.
+// captureSnippet grabs the last few meaningful lines from the Claude pane.
 func captureSnippet(sessionID string) string {
 	// Find the Claude pane (role=claude)
 	paneOut, err := exec.Command("tmux", "list-panes", "-t", sessionID+":0",
@@ -127,6 +127,11 @@ func captureSnippet(sessionID string) string {
 	if len(meaningful) == 0 {
 		return ""
 	}
-	return meaningful[len(meaningful)-1]
+	// Take last 4 meaningful lines
+	start := len(meaningful) - 4
+	if start < 0 {
+		start = 0
+	}
+	return strings.Join(meaningful[start:], "\n")
 }
 
