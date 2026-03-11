@@ -155,6 +155,16 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor = max(0, len(m.workers)-1)
 			}
 		}
+
+	case "d":
+		if len(m.workers) > 0 {
+			w := m.workers[m.cursor]
+			_ = deleteWorker(w.ID)
+			m.workers = fetchWorkers(m.masterID)
+			if m.cursor >= len(m.workers) {
+				m.cursor = max(0, len(m.workers)-1)
+			}
+		}
 	}
 
 	return m, nil
@@ -258,7 +268,7 @@ func (m model) View() string {
 		b.WriteString(fmt.Sprintf("  %s> %s\n", label, m.input.View()))
 		b.WriteString(footerStyle.Render("  enter:send  esc:cancel") + "\n")
 	} else {
-		b.WriteString(footerStyle.Render("  j/k:nav  ⏎:attach  r:relay  b:bcast  s:spawn  x:stop  q:quit") + "\n")
+		b.WriteString(footerStyle.Render("  j/k:nav  ⏎:attach  r:relay  b:bcast  s:spawn  x:stop  d:delete  q:quit") + "\n")
 	}
 
 	return b.String()
