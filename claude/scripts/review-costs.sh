@@ -15,7 +15,7 @@ session_id="${1:-}"
 
 # If no session specified, use the latest session in the trace
 if [[ -z "$session_id" ]]; then
-  session_id=$(grep '"event":"stop"' "$TRACE_FILE" | tail -1 | jq -r '.session // empty' 2>/dev/null)
+  session_id=$(grep '"event":"stop"' "$TRACE_FILE" | tail -1 | jq -r '.session // empty' 2>/dev/null || true)
   if [[ -z "$session_id" ]]; then
     echo "No sessions found in trace file." >&2
     exit 1

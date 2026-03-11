@@ -43,8 +43,13 @@ if ! echo "$COMMAND" | grep -qE 'git\s+(checkout|switch)'; then
     exit 0
 fi
 
-# Allow file checkouts (git checkout -- file, git checkout HEAD -- file, etc.)
-if echo "$COMMAND" | grep -qE 'git\s+checkout\s+(--\s|HEAD\s)'; then
+# Allow file checkouts (git checkout [<tree-ish>] -- <pathspec>)
+if echo "$COMMAND" | grep -qE 'git\s+checkout\b.*\s--(\s|$)'; then
+    echo '{}'
+    exit 0
+fi
+# Allow git checkout HEAD <file> (implicit pathspec, no -- separator)
+if echo "$COMMAND" | grep -qE 'git\s+checkout\s+HEAD\s'; then
     echo '{}'
     exit 0
 fi
@@ -79,43 +84,66 @@ fi
 # Rewrite: branch switch → worktree add
 REPO_NAME=$(basename "$GIT_ROOT" 2>/dev/null || echo "repo")
 
-# Extract target branch from: git checkout [-b] <branch> | git switch [-c] <branch>
-# Strip flags first, then take the last token as the branch name.
-BRANCH=$(echo "$COMMAND" | sed -E 's/git\s+(checkout|switch)\s+//' | sed -E 's/-(b|c|B|C)\s+//' | awk '{print $NF}')
+# Parse arguments after git checkout/switch
+ARGS=$(echo "$COMMAND" | sed -E 's/^.*git[[:space:]]+(checkout|switch)[[:space:]]+//')
+read -ra TOKENS <<< "$ARGS"
 
-if [ -z "$BRANCH" ]; then
-  # Can't determine branch — fall back to deny
-  cat << 'GUARD_EOF'
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: Could not parse branch name from checkout/switch command in main worktree."
-  }
-}
-GUARD_EOF
+CREATE_FLAG=""
+BRANCH=""
+START_POINT=""
+
+case "${TOKENS[0]:-}" in
+  -b|-c|--create)
+    CREATE_FLAG="-b"
+    BRANCH="${TOKENS[1]:-}"
+    START_POINT="${TOKENS[2]:-}"
+    ;;
+  -B|-C)
+    CREATE_FLAG="-B"
+    BRANCH="${TOKENS[1]:-}"
+    START_POINT="${TOKENS[2]:-}"
+    ;;
+  -*)
+    # Unknown flag — can't parse unambiguously
+    BRANCH=""
+    ;;
+  *)
+    BRANCH="${TOKENS[0]:-}"
+    # Extra args without creation flag → ambiguous
+    [ ${#TOKENS[@]} -gt 1 ] && BRANCH=""
+    ;;
+esac
+
+# Validate: non-empty, safe characters only (prevents shell/JSON injection)
+SAFE_REF='^[a-zA-Z0-9._/-]+$'
+DENY=false
+if [ -z "$BRANCH" ] || ! echo "$BRANCH" | grep -qE "$SAFE_REF"; then
+  DENY=true
+elif [ -n "$START_POINT" ] && ! echo "$START_POINT" | grep -qE "$SAFE_REF"; then
+  DENY=true
+fi
+
+if [ "$DENY" = true ]; then
+  jq -cn \
+    --arg reason "BLOCKED: Branch switching in main worktree. Use: git worktree add ../${REPO_NAME}-<branch> [-b] <branch>" \
+    '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
   exit 0
 fi
 
-WORKTREE_PATH="../${REPO_NAME}-${BRANCH}"
+WORKTREE_DIR=$(echo "$BRANCH" | tr '/' '-')
+WORKTREE_PATH="../${REPO_NAME}-${WORKTREE_DIR}"
 
-# Determine if this is a new branch (-b/-c flag) or existing
-if echo "$COMMAND" | grep -qE '\s-(b|c|B|C)\s'; then
-  REWRITTEN="git worktree add ${WORKTREE_PATH} -b ${BRANCH} && cd ${WORKTREE_PATH}"
+if [ -n "$CREATE_FLAG" ]; then
+  REWRITTEN="git worktree add ${WORKTREE_PATH} ${CREATE_FLAG} ${BRANCH}"
+  [ -n "$START_POINT" ] && REWRITTEN="${REWRITTEN} ${START_POINT}"
 else
-  REWRITTEN="git worktree add ${WORKTREE_PATH} ${BRANCH} && cd ${WORKTREE_PATH}"
+  REWRITTEN="git worktree add ${WORKTREE_PATH} ${BRANCH}"
 fi
+REWRITTEN="${REWRITTEN} && cd ${WORKTREE_PATH}"
 
-cat << EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "permissionDecisionReason": "Rewrote branch switch to worktree: ${BRANCH} → ${WORKTREE_PATH}",
-    "updatedInput": {
-      "command": "${REWRITTEN}"
-    }
-  }
-}
-EOF
+# Emit response via jq (safe JSON encoding)
+jq -cn \
+  --arg reason "Rewrote branch switch to worktree: ${BRANCH} → ${WORKTREE_PATH}" \
+  --arg cmd "$REWRITTEN" \
+  '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "allow", permissionDecisionReason: $reason, updatedInput: {command: $cmd}}}'
 exit 0
