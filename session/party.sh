@@ -59,12 +59,13 @@ party_window_name() {
 }
 
 configure_party_theme() {
-  local session="${1:?Usage: configure_party_theme SESSION_NAME}"
+  local target="${1:?Usage: configure_party_theme SESSION_OR_WINDOW_TARGET}"
 
   # Role labels driven by @party_role metadata, with session ID suffix when available.
   # IDs appear after agents register (Claude on SessionStart, Codex on first message).
-  tmux set-option -t "$session" pane-border-status top
-  tmux set-option -t "$session" pane-border-format \
+  # Use -w to set as window option so each window gets it independently.
+  tmux set-option -w -t "$target" pane-border-status top
+  tmux set-option -w -t "$target" pane-border-format \
     ' #{?#{==:#{@party_role},claude},The Paladin#{?#{CLAUDE_SESSION_ID}, (#{CLAUDE_SESSION_ID}),},#{?#{==:#{@party_role},codex},The Wizard#{?#{CODEX_THREAD_ID}, (#{CODEX_THREAD_ID}),},#{?#{==:#{@party_role},shell},Shell,#{?#{==:#{@party_role},tracker},Tracker,}}}} '
 }
 
@@ -205,7 +206,7 @@ party_launch_master() {
   tmux select-pane -t "$session:0.0" -T "Tracker"
   tmux select-pane -t "$session:0.1" -T "The Paladin"
   tmux select-pane -t "$session:0.2" -T "Shell"
-  configure_party_theme "$session"
+  configure_party_theme "$session:0"
   party_set_cleanup_hook "$session"
   tmux select-pane -t "$session:0.1"
 }
@@ -236,7 +237,6 @@ party_start_master() {
 
   party_prune_manifests
   state_dir="$(ensure_party_state_dir "$session")"
-  # Master manifest uses codex_bin="" since there's no Codex pane
   party_state_upsert_manifest "$session" "$title" "$session_cwd" "$window_name" "$claude_bin" "" "$agent_path" || true
   party_state_set_field "$session" "session_type" "master" || true
   party_state_set_field "$session" "last_started_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
@@ -263,7 +263,8 @@ party_create_session() {
   local window_name="${2:?Missing window_name}"
   local session_cwd="${3:?Missing session_cwd}"
 
-  tmux new-session -d -s "$session" -n "$window_name" -c "$session_cwd"
+  # Unset TMUX to avoid nested-session errors when called from inside tmux
+  TMUX= tmux new-session -d -s "$session" -n "$window_name" -c "$session_cwd"
 }
 
 party_start() {
