@@ -80,7 +80,7 @@ party_set_cleanup_hook() {
   # On session close: deregister from parent (if worker), remove runtime.
   # Only delete manifest if not a master with active workers.
   tmux set-hook -t "$session" session-closed \
-    "run-shell 'source $lib_path 2>/dev/null && { p=\$(party_state_get_field $session parent_session 2>/dev/null); [ -n \"\$p\" ] && party_state_remove_worker \"\$p\" $session 2>/dev/null; }; rm -rf /tmp/$session; t=\$(party_state_get_field $session session_type 2>/dev/null); w=\$(party_state_get_field $session workers 2>/dev/null); if [ \"\$t\" = master ] && [ -n \"\$w\" ] && [ \"\$w\" != \"[]\" ]; then :; else rm -f $state_root/$session.json; fi'"
+    "run-shell 'source $lib_path 2>/dev/null && { p=\$(party_state_get_field $session parent_session 2>/dev/null); [ -n \"\$p\" ] && party_state_remove_worker \"\$p\" $session 2>/dev/null; }; rm -rf /tmp/$session; t=\$(party_state_get_field $session session_type 2>/dev/null); if [ \"\$t\" = master ]; then :; else rm -f $state_root/$session.json; fi'"
 }
 
 party_launch_agents() {
@@ -332,6 +332,7 @@ party_stop() {
     _party_deregister_from_parent "$target"
     tmux kill-session -t "$target" 2>/dev/null || true
     rm -rf "/tmp/$target"
+    rm -f "$(party_state_file "$target")"
     echo "Party session '$target' stopped."
     return 0
   fi
@@ -349,6 +350,7 @@ party_stop() {
     _party_deregister_from_parent "$name"
     tmux kill-session -t "$name" 2>/dev/null || true
     rm -rf "/tmp/$name"
+    rm -f "$(party_state_file "$name")"
     echo "Stopped: $name"
   done <<< "$sessions"
 }
