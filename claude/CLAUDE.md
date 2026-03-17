@@ -49,7 +49,7 @@ Save investigation findings to `~/.claude/investigations/<issue-slug>.md`.
 Codex runs in a tmux pane alongside you. Communicate via `tmux-codex.sh`. All dispatches are non-blocking — keep working while Codex thinks.
 
 - ALWAYS use `tmux-codex.sh`, NEVER Task sub-agents for Codex.
-- **Dispatch Codex FIRST** before launching sub-agents or doing other work. Codex is async via tmux (Bash), which cannot run in parallel — so fire the Codex call first, then launch parallel sub-agents while Codex works.
+- **Dispatch Codex FIRST**, then launch sub-agents while Codex works.
 - `[CODEX]` messages are from Codex. Handle per `tmux-handler` skill.
 - You decide verdicts. Codex produces findings, you triage.
 
