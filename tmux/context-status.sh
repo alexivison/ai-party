@@ -9,7 +9,6 @@
 #   Cache file written by status-line.sh (/tmp/ai-context-cache/claude-<pane>)
 
 CACHE_DIR="/tmp/ai-context-cache"
-ICON_CLAUDE=$(printf '\U000F0510')   # nf-md-shield_sword (paladin)
 
 # Color thresholds (tmux #[fg=...] style)
 color_for_pct() {
@@ -36,14 +35,16 @@ server_hash="${server_hash:0:8}"
 cache_file="$CACHE_DIR/claude-${server_hash}-${pane_id#%}"
 [[ -f "$cache_file" ]] || exit 0
 
-# Stale check: ignore if older than 60s
+# Stale check: ignore if older than 10 minutes.
+# Claude Code only writes on status changes (not on a timer), so short TTLs
+# cause the widget to flicker during idle periods.
 now=$(date +%s)
 file_age=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null) || exit 0
-(( now - file_age > 60 )) && exit 0
+(( now - file_age > 600 )) && exit 0
 
 IFS=$'\t' read -r model pct < "$cache_file"
 [[ -z "$pct" ]] && exit 0
 
 c=$(color_for_pct "$pct")
-printf '#[fg=#539bf5,bold]%s #[fg=#768390,nobold]%s #[fg=%s,bold]%s%%#[fg=#636e7b,nobold] ' \
-    "$ICON_CLAUDE" "$model" "$c" "$pct"
+printf '#[fg=#539bf5,bold]Paladin: #[fg=#768390,nobold]%s #[fg=%s,bold]%s%%#[fg=#636e7b,nobold] ' \
+    "$model" "$c" "$pct"
