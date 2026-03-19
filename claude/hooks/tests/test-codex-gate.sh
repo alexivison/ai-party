@@ -122,25 +122,41 @@ assert "phase 1: stale critic evidence rejected after code edit" \
 
 # ═══ Two-phase model ═══════════════════════════════════════════════════════
 
-# Test: phase 2 — codex-ran + prior critics → allows --review without fresh critics
+# Test: phase 2 — critics + codex-ran at SAME hash → allows re-review after fix commit
 clean_evidence
 append_evidence "$SESSION_ID" "code-critic" "APPROVED" "$TMPDIR_BASE"
 append_evidence "$SESSION_ID" "minimizer" "APPROVED" "$TMPDIR_BASE"
 append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
-# Change code (stales critic evidence but phase 2 doesn't require fresh critics)
+# Fix codex finding (changes hash, stales critic evidence)
 cd "$TMPDIR_BASE"
 echo "fix codex finding" >> impl.sh
 git add impl.sh && git commit -q -m "codex fix"
 OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
-assert "phase 2: codex-ran + prior critics → allows re-review" \
+assert "phase 2: critics + codex-ran at same hash → allows re-review" \
   '! echo "$OUTPUT" | grep -q "deny"'
 
-# Test: phase 2 — codex-ran WITHOUT prior critics → blocked
+# Test: phase 2 — codex-ran WITHOUT critics at same hash → blocked
 clean_evidence
 append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
 OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
-assert "phase 2: codex-ran but no prior critics → blocked" \
+assert "phase 2: codex-ran but no critics at same hash → blocked" \
   'echo "$OUTPUT" | grep -q "deny"'
+
+# Test: phase 2 — critics at DIFFERENT hash than codex-ran → blocked (new feature)
+clean_evidence
+# Simulate: old feature had critics + codex at hash_A
+cd "$TMPDIR_BASE"
+echo "old feature" > old.sh && git add old.sh && git commit -q -m "old feature"
+append_evidence "$SESSION_ID" "code-critic" "APPROVED" "$TMPDIR_BASE"
+append_evidence "$SESSION_ID" "minimizer" "APPROVED" "$TMPDIR_BASE"
+append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
+# New unrelated commit changes the hash — critics are at old hash, codex-ran at old hash
+echo "new feature" > new.sh && git add new.sh && git commit -q -m "new feature"
+# Critics at old hash match codex-ran at old hash, so phase 2 still applies
+# (codex will review the full diff including new.sh)
+OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
+assert "phase 2: same review chain, new commit → allows re-review" \
+  '! echo "$OUTPUT" | grep -q "deny"'
 
 # Test: phase 1 — no codex-ran, no critics → blocked
 clean_evidence

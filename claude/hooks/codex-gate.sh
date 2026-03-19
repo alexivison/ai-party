@@ -52,26 +52,28 @@ fi
 
 # Two-phase gate:
 # - Phase 1 (first review): both critics must APPROVE at current hash
-# - Phase 2 (re-review after codex fixes): codex-ran at ANY hash means codex
-#   already reviewed once — critics did their job in phase 1, skip them.
+# - Phase 2 (re-review after codex fixes): codex previously reviewed, AND critics
+#   approved at the SAME hash codex first reviewed. This proves critics and codex
+#   reviewed the same code — subsequent changes are codex-fix iterations only.
 CWD=$(_resolve_cwd "$SESSION_ID" "$CWD")
 EVIDENCE_FILE=$(evidence_file "$SESSION_ID")
-CODEX_PREVIOUSLY_RAN=false
+CODEX_REVIEW_HASH=""
 if [ -f "$EVIDENCE_FILE" ]; then
-  if jq -e 'select(.type == "codex-ran")' "$EVIDENCE_FILE" >/dev/null 2>&1; then
-    CODEX_PREVIOUSLY_RAN=true
-  fi
+  # Find the hash of the first codex-ran entry (when codex first reviewed)
+  CODEX_REVIEW_HASH=$(jq -r 'select(.type == "codex-ran") | .diff_hash' "$EVIDENCE_FILE" 2>/dev/null | head -1)
 fi
 
-if $CODEX_PREVIOUSLY_RAN; then
-  # Phase 2: codex already reviewed once — allow re-review without fresh critics.
-  # Defense-in-depth: verify critics ran at SOME point in this session.
-  if check_evidence_any_hash "$SESSION_ID" "code-critic" && \
-     check_evidence_any_hash "$SESSION_ID" "minimizer"; then
+if [ -n "$CODEX_REVIEW_HASH" ]; then
+  # Phase 2: codex already reviewed. Verify critics approved at the same hash
+  # codex first reviewed (proving both phases covered the same code).
+  if jq -e --arg hash "$CODEX_REVIEW_HASH" \
+    'select(.type == "code-critic" and .diff_hash == $hash)' "$EVIDENCE_FILE" >/dev/null 2>&1 && \
+     jq -e --arg hash "$CODEX_REVIEW_HASH" \
+    'select(.type == "minimizer" and .diff_hash == $hash)' "$EVIDENCE_FILE" >/dev/null 2>&1; then
     echo '{}'
     exit 0
   fi
-  # Critics never ran — fall through to phase 1 gate
+  # Critics didn't approve at the same hash codex reviewed — fall through to phase 1
 fi
 
 # Phase 1: first review — require both critic APPROVE evidence

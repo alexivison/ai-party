@@ -248,17 +248,6 @@ check_evidence() {
     'select(.type == $type and .diff_hash == $hash)' "$file" >/dev/null 2>&1
 }
 
-# Like check_evidence but ignores diff_hash — checks that a type was ever recorded
-# in this session. Used for two-phase model: critics ran at SOME point.
-check_evidence_any_hash() {
-  local session_id="$1" type="$2"
-  local file
-  file=$(evidence_file "$session_id")
-  [ ! -f "$file" ] && return 1
-
-  jq -e --arg type "$type" \
-    'select(.type == $type)' "$file" >/dev/null 2>&1
-}
 
 check_all_evidence() {
   local session_id="$1" types_string="$2" cwd="$3"

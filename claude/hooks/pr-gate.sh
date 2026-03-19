@@ -66,11 +66,20 @@ if echo "$COMMAND" | grep -qE 'gh pr create'; then
     fi
   else
     # No quick-tier evidence — full gate
-    # Two-phase model: if codex approved at current hash, critics at ANY hash
-    # is sufficient (they ran before first codex review, codex validated fixes).
+    # Two-phase model: if codex approved at current hash, check that critics
+    # approved at the same hash codex first reviewed (proving both phases
+    # covered the same base code — subsequent changes are codex-fix iterations).
+    EVIDENCE_FILE=$(evidence_file "$SESSION_ID")
+    CODEX_REVIEW_HASH=""
+    if [ -f "$EVIDENCE_FILE" ]; then
+      CODEX_REVIEW_HASH=$(jq -r 'select(.type == "codex-ran") | .diff_hash' "$EVIDENCE_FILE" 2>/dev/null | head -1)
+    fi
     if check_evidence "$SESSION_ID" "codex" "$CWD" 2>/dev/null && \
-       check_evidence_any_hash "$SESSION_ID" "code-critic" && \
-       check_evidence_any_hash "$SESSION_ID" "minimizer"; then
+       [ -n "$CODEX_REVIEW_HASH" ] && \
+       jq -e --arg hash "$CODEX_REVIEW_HASH" \
+         'select(.type == "code-critic" and .diff_hash == $hash)' "$EVIDENCE_FILE" >/dev/null 2>&1 && \
+       jq -e --arg hash "$CODEX_REVIEW_HASH" \
+         'select(.type == "minimizer" and .diff_hash == $hash)' "$EVIDENCE_FILE" >/dev/null 2>&1; then
       REQUIRED="pr-verified codex test-runner check-runner"
     else
       REQUIRED="pr-verified code-critic minimizer codex test-runner check-runner"
