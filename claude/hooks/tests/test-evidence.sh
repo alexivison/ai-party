@@ -271,16 +271,26 @@ git -C "$TMPDIR_BASE" worktree remove "$WORKTREE_DIR" 2>/dev/null || rm -rf "$WO
 
 # ═══ append_triage_override ════════════════════════════════════════════════
 
-echo "=== append_triage_override: allowed type creates evidence ==="
+echo "=== append_triage_override: allowed type with prior critic run ==="
 cleanup
 setup_repo
 echo "impl" > impl.sh && git add impl.sh && git commit -q -m "impl"
+# Critic must have run first — simulate REQUEST_CHANGES
+append_evidence "$SESSION" "code-critic" "REQUEST_CHANGES" "$TMPDIR_BASE"
 append_triage_override "$SESSION" "code-critic" "Out-of-scope: rebased auth files" "$TMPDIR_BASE"
 assert "Triage override creates evidence" 'check_evidence "$SESSION" "code-critic" "$TMPDIR_BASE"'
 EFILE=$(evidence_file "$SESSION")
 assert "Evidence has triage_override flag" '[ "$(tail -1 "$EFILE" | jq -r .triage_override)" = "true" ]'
 assert "Evidence has rationale" '[ "$(tail -1 "$EFILE" | jq -r .rationale)" = "Out-of-scope: rebased auth files" ]'
 assert "Evidence result is APPROVED" '[ "$(tail -1 "$EFILE" | jq -r .result)" = "APPROVED" ]'
+
+echo "=== append_triage_override: rejected without prior critic run ==="
+cleanup
+setup_repo
+echo "impl" > impl.sh && git add impl.sh && git commit -q -m "impl"
+OUTPUT=$(append_triage_override "$SESSION" "code-critic" "Trying to skip critics" "$TMPDIR_BASE" 2>&1) || true
+assert "No prior critic run → error" 'echo "$OUTPUT" | grep -q "critic must"'
+assert "No evidence without prior critic" '! check_evidence "$SESSION" "code-critic" "$TMPDIR_BASE"'
 
 echo "=== append_triage_override: disallowed type rejected ==="
 cleanup
@@ -294,9 +304,11 @@ echo "=== append_triage_override: empty rationale rejected ==="
 cleanup
 setup_repo
 echo "impl" > impl.sh && git add impl.sh && git commit -q -m "impl"
+append_evidence "$SESSION" "minimizer" "REQUEST_CHANGES" "$TMPDIR_BASE"
 OUTPUT=$(append_triage_override "$SESSION" "minimizer" "" "$TMPDIR_BASE" 2>&1) || true
 assert "Empty rationale returns error" 'echo "$OUTPUT" | grep -q "requires a rationale"'
-assert "No evidence created without rationale" '! check_evidence "$SESSION" "minimizer" "$TMPDIR_BASE"'
+EFILE=$(evidence_file "$SESSION")
+assert "No override entry added" '[ "$(jq -r "select(.triage_override == true)" "$EFILE" 2>/dev/null | wc -l | tr -d " ")" = "0" ]'
 
 # ═══ Worktree scenario (integration) ════════════════════════════════════════
 

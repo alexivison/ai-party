@@ -212,11 +212,19 @@ assert "Step 5: codex recreated" 'has_evidence "codex"'
 
 # ═══ --triage-override ════════════════════════════════════════════════════════
 
-echo "=== triage-override: valid type creates evidence ==="
+echo "=== triage-override: valid type with prior critic run ==="
 clean_evidence
+# Critic must have run first
+append_evidence "$SESSION" "code-critic" "REQUEST_CHANGES" "$TMPDIR_BASE"
 OVERRIDE_STDOUT='TRIAGE_OVERRIDE code-critic | Out-of-scope: rebased auth files'
 run_hook "$(bash_input_obj 'tmux-codex.sh --triage-override code-critic "Out-of-scope: rebased auth files"' "$OVERRIDE_STDOUT")"
 assert "Valid triage override → code-critic evidence" 'has_evidence "code-critic"'
+
+echo "=== triage-override: rejected without prior critic run ==="
+clean_evidence
+OVERRIDE_STDOUT2='TRIAGE_OVERRIDE code-critic | No critic ran'
+run_hook "$(bash_input_obj 'tmux-codex.sh --triage-override code-critic "No critic ran"' "$OVERRIDE_STDOUT2")"
+assert "No prior critic → no evidence" '! has_evidence "code-critic"'
 
 echo "=== triage-override: invalid type rejected ==="
 clean_evidence
@@ -226,6 +234,8 @@ assert "Invalid type → no codex evidence" '! has_evidence "codex"'
 
 echo "=== triage-override: combined with CODEX_REVIEW_RAN ==="
 clean_evidence
+# Critic must have run first
+append_evidence "$SESSION" "minimizer" "REQUEST_CHANGES" "$TMPDIR_BASE"
 COMBINED_OVERRIDE=$'CODEX_REVIEW_RAN\nTRIAGE_OVERRIDE minimizer | Rebased code from PR #65315'
 run_hook "$(bash_input_obj 'tmux-codex.sh --review-complete /tmp/f.toon' "$COMBINED_OVERRIDE")"
 assert "Combined → codex-ran evidence" 'has_evidence "codex-ran"'

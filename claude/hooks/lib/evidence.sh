@@ -202,6 +202,19 @@ append_triage_override() {
   file=$(evidence_file "$session_id")
   local diff_hash
   diff_hash=$(compute_diff_hash "$cwd")
+
+  # Guard: critic must have actually run on this hash (has any entry at current diff_hash).
+  # Prevents synthesizing approvals without critics ever running.
+  if [ -f "$file" ]; then
+    if ! jq -e --arg type "$type" --arg hash "$diff_hash" \
+      'select(.type == $type and .diff_hash == $hash)' "$file" >/dev/null 2>&1; then
+      echo "ERROR: triage override requires '$type' to have run at current diff_hash. Run the critic first." >&2
+      return 1
+    fi
+  else
+    echo "ERROR: no evidence file — critic must run before override is possible" >&2
+    return 1
+  fi
   local timestamp
   timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
