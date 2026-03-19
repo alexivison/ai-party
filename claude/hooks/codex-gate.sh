@@ -64,9 +64,14 @@ if [ -f "$EVIDENCE_FILE" ]; then
 fi
 
 if $CODEX_PREVIOUSLY_RAN; then
-  # Phase 2: codex already reviewed once — allow re-review without critics
-  echo '{}'
-  exit 0
+  # Phase 2: codex already reviewed once — allow re-review without fresh critics.
+  # Defense-in-depth: verify critics ran at SOME point in this session.
+  if check_evidence_any_hash "$SESSION_ID" "code-critic" && \
+     check_evidence_any_hash "$SESSION_ID" "minimizer"; then
+    echo '{}'
+    exit 0
+  fi
+  # Critics never ran — fall through to phase 1 gate
 fi
 
 # Phase 1: first review — require both critic APPROVE evidence

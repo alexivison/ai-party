@@ -122,25 +122,25 @@ assert "phase 1: stale critic evidence rejected after code edit" \
 
 # ═══ Two-phase model ═══════════════════════════════════════════════════════
 
-# Test: phase 2 — codex-ran exists, allows --review without critics
+# Test: phase 2 — codex-ran + prior critics → allows --review without fresh critics
 clean_evidence
+append_evidence "$SESSION_ID" "code-critic" "APPROVED" "$TMPDIR_BASE"
+append_evidence "$SESSION_ID" "minimizer" "APPROVED" "$TMPDIR_BASE"
 append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
-OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
-assert "phase 2: codex-ran exists → allows --review without critics" \
-  '! echo "$OUTPUT" | grep -q "deny"'
-
-# Test: phase 2 — codex-ran at OLD hash still enables phase 2
-clean_evidence
+# Change code (stales critic evidence but phase 2 doesn't require fresh critics)
 cd "$TMPDIR_BASE"
-# Record codex-ran at current hash
-append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
-# Change code (new hash)
 echo "fix codex finding" >> impl.sh
 git add impl.sh && git commit -q -m "codex fix"
-# codex-ran is at old hash but phase 2 checks ANY hash
 OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
-assert "phase 2: codex-ran at old hash still allows re-review" \
+assert "phase 2: codex-ran + prior critics → allows re-review" \
   '! echo "$OUTPUT" | grep -q "deny"'
+
+# Test: phase 2 — codex-ran WITHOUT prior critics → blocked
+clean_evidence
+append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
+OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
+assert "phase 2: codex-ran but no prior critics → blocked" \
+  'echo "$OUTPUT" | grep -q "deny"'
 
 # Test: phase 1 — no codex-ran, no critics → blocked
 clean_evidence

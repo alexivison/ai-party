@@ -66,7 +66,15 @@ if echo "$COMMAND" | grep -qE 'gh pr create'; then
     fi
   else
     # No quick-tier evidence — full gate
-    REQUIRED="pr-verified code-critic minimizer codex test-runner check-runner"
+    # Two-phase model: if codex approved at current hash, critics at ANY hash
+    # is sufficient (they ran before first codex review, codex validated fixes).
+    if check_evidence "$SESSION_ID" "codex" "$CWD" 2>/dev/null && \
+       check_evidence_any_hash "$SESSION_ID" "code-critic" && \
+       check_evidence_any_hash "$SESSION_ID" "minimizer"; then
+      REQUIRED="pr-verified codex test-runner check-runner"
+    else
+      REQUIRED="pr-verified code-critic minimizer codex test-runner check-runner"
+    fi
   fi
 
   MISSING=$(check_all_evidence "$SESSION_ID" "$REQUIRED" "$CWD" 2>&1 || true)
