@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for pr-gate.sh
-# Covers: full gate, tiered gate, docs-only bypass, stale evidence
+# Covers: full gate, docs-only bypass, stale evidence
 #
 # Usage: bash ~/.claude/hooks/tests/test-pr-gate.sh
 
@@ -43,13 +43,13 @@ clean_evidence() {
   rmdir "/tmp/claude-evidence-${SESSION_ID}.lock.d" 2>/dev/null || true
 }
 
-full_clean_evidence() {
+full_cleanup() {
   clean_evidence
   if [ -n "$TMPDIR_BASE" ] && [ -d "$TMPDIR_BASE" ]; then
     rm -rf "$TMPDIR_BASE"
   fi
 }
-trap full_clean_evidence EXIT
+trap full_cleanup EXIT
 
 gate_input() {
   jq -cn \
@@ -58,15 +58,10 @@ gate_input() {
     '{tool_input:{command:"gh pr create --title test"},session_id:$sid,cwd:$cwd}'
 }
 
-add_all_full_evidence() {
+add_all_evidence() {
   for type in pr-verified code-critic minimizer codex test-runner check-runner; do
     append_evidence "$SESSION_ID" "$type" "PASS" "$TMPDIR_BASE"
   done
-}
-
-add_quick_evidence() {
-  append_evidence "$SESSION_ID" "test-runner" "PASS" "$TMPDIR_BASE"
-  append_evidence "$SESSION_ID" "check-runner" "PASS" "$TMPDIR_BASE"
 }
 
 echo "--- test-pr-gate.sh ---"
@@ -87,60 +82,39 @@ assert "Docs-only PR allowed without evidence" \
 echo "=== Full gate: blocks when evidence missing ==="
 setup_repo
 clean_evidence
-# Large diff (>30 lines) to trigger full gate
-for i in $(seq 1 40); do echo "line $i" >> big.sh; done
-git add big.sh && git commit -q -m "big change"
+echo "change" >> file.txt
+git add file.txt && git commit -q -m "code change"
 OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
 assert "Full gate blocks without evidence" \
   'echo "$OUTPUT" | grep -q "deny"'
 
 echo "=== Full gate: allows when all evidence present ==="
 clean_evidence
-add_all_full_evidence
+add_all_evidence
 OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
 assert "Full gate allows with all evidence" \
   '! echo "$OUTPUT" | grep -q "deny"'
 
 echo "=== Full gate: blocks on stale diff_hash ==="
 clean_evidence
-add_all_full_evidence
+add_all_evidence
 cd "$TMPDIR_BASE"
-echo "stale" >> big.sh
-git add big.sh && git commit -q -m "stale edit"
+echo "stale" >> file.txt
+git add file.txt && git commit -q -m "stale edit"
 OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
 assert "Full gate blocks stale evidence" \
   'echo "$OUTPUT" | grep -q "deny"'
 
-# ═══ Tiered gate tests ══════════════════════════════════════════════════════
-
-echo "=== Tiered gate: small diff needs only test-runner + check-runner ==="
+echo "=== Full gate: small diff still requires full evidence ==="
 setup_repo
 clean_evidence
-echo "small edit" >> file.txt
-git add file.txt && git commit -q -m "small edit"
-add_quick_evidence
+echo "tiny fix" >> file.txt
+git add file.txt && git commit -q -m "tiny fix"
+# Only provide test-runner + check-runner (not full set)
+append_evidence "$SESSION_ID" "test-runner" "PASS" "$TMPDIR_BASE"
+append_evidence "$SESSION_ID" "check-runner" "PASS" "$TMPDIR_BASE"
 OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
-assert "Tiered gate: small diff with quick evidence passes" \
-  '! echo "$OUTPUT" | grep -q "deny"'
-
-echo "=== Tiered gate: large diff (>30 lines) requires full evidence ==="
-setup_repo
-clean_evidence
-for i in $(seq 1 40); do echo "line $i" >> file.txt; done
-git add file.txt && git commit -q -m "big edit"
-add_quick_evidence
-OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
-assert "Tiered gate: large diff with only quick evidence blocked" \
-  'echo "$OUTPUT" | grep -q "deny"'
-
-echo "=== Tiered gate: new files require full evidence ==="
-setup_repo
-clean_evidence
-echo "new" > new.sh
-git add new.sh && git commit -q -m "new file"
-add_quick_evidence
-OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
-assert "Tiered gate: new file with only quick evidence blocked" \
+assert "Small diff with partial evidence blocked" \
   'echo "$OUTPUT" | grep -q "deny"'
 
 # ═══ Non-PR commands pass through ═══════════════════════════════════════════

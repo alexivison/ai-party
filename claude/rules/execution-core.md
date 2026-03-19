@@ -47,11 +47,6 @@ Evidence is stored in a per-session JSONL log (`/tmp/claude-evidence-{session_id
 
 `codex-gate.sh` blocks `--review` without critic APPROVE evidence, blocks `--approve` without codex-ran evidence. If critics returned REQUEST_CHANGES, you MUST re-run them after fixing — the gate enforces this.
 
-## Tiered Execution
-
-- **Full tier** (default): current sequence unchanged (`/write-tests → implement → ... → PR`). Required evidence: pr-verified, code-critic, minimizer, codex, test-runner, check-runner.
-- **Quick tier**: for non-behavioral changes only (config, docs-with-code, dependency bumps, typo fixes, CI tweaks). Sequence: `implement → test-runner → check-runner → PR`. Required evidence: test-runner, check-runner. Size limit: ≤30 changed lines (additions + deletions), ≤3 files, 0 new files. Explicitly forbidden for: new features, bug fixes, logic changes, API changes, security-relevant changes.
-
 ## Review Governance
 
 Classify every finding before acting:
@@ -114,7 +109,7 @@ Evidence before claims. No assertions without proof (test output, file:line, gre
 
 ## PR Gate
 
-Code PRs require evidence matching the current diff_hash. Full tier: pr-verified, code-critic, minimizer, codex, test-runner, check-runner. Quick tier (≤30 lines, ≤3 files, 0 new files): test-runner, check-runner. Evidence created by `agent-trace-stop.sh`, `codex-trace.sh`, and `skill-marker.sh`.
+Code PRs require evidence matching the current diff_hash: pr-verified, code-critic, minimizer, codex, test-runner, check-runner. Evidence created by `agent-trace-stop.sh`, `codex-trace.sh`, and `skill-marker.sh`.
 
 **Post-PR:** Changes in same branch → re-run /pre-pr-verification → amend + force-push with `--force-with-lease`.
 
