@@ -92,6 +92,17 @@ Claude fixed blocking issues and requests another pass.
 - Do NOT re-raise findings that were already addressed
 - Do not introduce new nit-level churn in re-review unless explicitly requested
 
+### Re-review with dispute context
+Claude dismissed some findings as out-of-scope and provided rationales in a dispute context file referenced in the review message.
+
+1. Read the dispute context file before reviewing the diff
+2. For each dismissed finding, evaluate the rationale:
+   - **Valid dismissal** (code truly out-of-scope, not newly reachable, pre-existing) → accept and drop from findings
+   - **Invalid dismissal** (the diff touches/imports/depends on the dismissed code) → challenge with a specific file:line reference showing why it IS in scope
+3. A challenge MUST cite concrete evidence (file:line, diff hunk, dependency chain) — "I still think this is wrong" is not a valid challenge
+4. Do NOT re-raise accepted dismissals in subsequent reviews
+5. Set verdict based on remaining in-scope findings only — accepted dismissals do not count
+
 ### Task request
 Claude asks you to investigate or work on something.
 

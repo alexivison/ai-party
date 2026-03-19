@@ -56,8 +56,9 @@ Use the canonical sequence in [execution-core.md](~/.claude/rules/execution-core
       - **BARRIER:** no code edits until both Codex AND adversarial reviewer return.
       - Reviewer findings are advisory (no gating markers).
 9. **Triage findings** — When `[CODEX] Review complete` arrives: read findings, triage by severity. Triage the UNION of Codex + adversarial reviewer findings.
-   - **Blocking findings:** fix code → commit → dispatch new `--review` → `--review-complete`. No critic re-run needed — phase 2 gate allows re-review after codex has run once.
-   - Round 2: if blocking findings remain after second Codex review, escalate `--needs-discussion`.
+   - **Blocking in-scope findings:** fix code → commit → dispatch new `--review` → `--review-complete`. No critic re-run needed — phase 2 gate allows re-review after codex has run once.
+   - **Out-of-scope findings:** write dispute context file with dismissed finding IDs + rationales → pass as 5th arg to `--review`. Codex accepts valid dismissals or challenges with evidence. See tmux-handler skill for full dispute protocol.
+   - **NEEDS_DISCUSSION:** debate via `--prompt` (2 rounds max) before escalating to user. See tmux-handler skill for protocol.
    - Non-blocking / approved: `--review-complete` reads the verdict from the findings file. Do NOT call `--approve` directly.
 10. **PR Verification** — Invoke `/pre-pr-verification` (runs test-runner + check-runner internally)
    - **If you edit ANY implementation file after this step passes → re-run `/pre-pr-verification` before commit.** Even a JSDoc fix invalidates prior evidence.
@@ -75,7 +76,7 @@ See [execution-core.md](~/.claude/rules/execution-core.md#review-governance) for
 - Out-of-scope file touches are blocking unless explicitly justified
 - Triage findings as **blocking** (fix + re-run), **non-blocking** (note only), or **out-of-scope** (reject)
 - Only blocking findings continue the review loop
-- Max 2 critic iterations and max 2 codex iterations for blocking, then NEEDS_DISCUSSION
+- Max 3 critic iterations and max 3 codex iterations for blocking, then dispute resolution (2 rounds) before escalating to user
 
 ## Plan Conformance (Checkbox Enforcement)
 
@@ -97,7 +98,7 @@ Key points for task workflow:
 - Invoke after critics have no remaining blocking findings
 - Non-blocking — continue with non-edit work while Codex reviews
 - **Timing constraint:** Do not dispatch Codex review while critic fixes are still pending. If you edit implementation files after dispatching Codex but before Codex returns, the review is stale — discard it, re-run critics, and dispatch a fresh `--review`.
-- Max 2 iterations for blocking findings, then NEEDS_DISCUSSION
+- Max 3 iterations for blocking findings, then dispute resolution (2 rounds) before escalating to user
 - Approval flows through `--review-complete`, which reads the `VERDICT:` line Codex wrote in the findings file. Do NOT call `--approve` directly.
 
 ## Core Reference
