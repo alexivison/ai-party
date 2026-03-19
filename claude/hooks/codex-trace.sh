@@ -4,6 +4,7 @@
 # 2. Creates codex APPROVED evidence when --review-complete also emits CODEX APPROVED
 #    (happens when findings file contains VERDICT: APPROVED from Codex)
 #    Only creates approval if codex-ran evidence exists at the same diff_hash.
+# 3. Creates triage override evidence when --triage-override emits TRIAGE_OVERRIDE
 #
 # Triggered: PostToolUse on Bash tool
 # Fails open on errors
@@ -76,6 +77,21 @@ if echo "$response" | grep -qx "CODEX APPROVED"; then
   else
     echo "BLOCKED: tmux-codex.sh --approve called without evidence of codex review completion"
     log_evidence "CODEX_APPROVE_BLOCKED"
+  fi
+fi
+
+# --- Evidence: triage override (out-of-scope critic findings) ---
+# --triage-override emits "TRIAGE_OVERRIDE <type> | <rationale>"
+override_line=$(echo "$response" | grep "^TRIAGE_OVERRIDE " | head -1)
+if [ -n "$override_line" ]; then
+  override_type=$(echo "$override_line" | awk '{print $2}')
+  override_rationale=${override_line#*| }
+  if [ -n "$override_type" ] && [ -n "$override_rationale" ]; then
+    if append_triage_override "$session_id" "$override_type" "$override_rationale" "$cwd"; then
+      log_evidence "TRIAGE_OVERRIDE:$override_type"
+    else
+      log_evidence "TRIAGE_OVERRIDE_REJECTED:$override_type"
+    fi
   fi
 fi
 

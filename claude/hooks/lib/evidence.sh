@@ -39,6 +39,8 @@ _resolve_merge_base() {
 # ── Worktree cwd resolution ──
 # When a session operates in a git worktree but hook input carries the main repo cwd,
 # the override file redirects to the actual worktree path.
+# Validates that the override belongs to the same git repo as hook_cwd to prevent
+# stale overrides from prior sessions or different projects from poisoning hashes.
 
 _resolve_cwd() {
   local session_id="$1" hook_cwd="$2"
@@ -47,8 +49,25 @@ _resolve_cwd() {
     local worktree_cwd
     worktree_cwd=$(cat "$override_file")
     if [ -d "$worktree_cwd" ]; then
-      echo "$worktree_cwd"
-      return
+      # Validate: if hook_cwd is a git repo, override must be from the same repo.
+      # If hook_cwd is NOT a git repo (invalid/wrong cwd), trust the override.
+      # Compare git-common-dir to verify same repo. pwd -P resolves
+      # macOS symlinks (/var → /private/var). The cd chain ensures
+      # relative git-common-dir paths (e.g. ".git") resolve from the repo dir.
+      local hook_common
+      hook_common=$(cd "$hook_cwd" 2>/dev/null && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || true
+      if [ -z "$hook_common" ]; then
+        # hook_cwd is not a git repo — override is more reliable
+        echo "$worktree_cwd"
+        return
+      fi
+      local override_common
+      override_common=$(cd "$worktree_cwd" 2>/dev/null && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || true
+      if [ -n "$override_common" ] && [ "$hook_common" = "$override_common" ]; then
+        echo "$worktree_cwd"
+        return
+      fi
+      # Override points to a different repo — ignore it (stale from prior session)
     fi
   fi
   echo "$hook_cwd"
@@ -58,7 +77,10 @@ _resolve_cwd() {
 _DIFF_EXCLUDES=(-- . ':!*.md' ':!*.log' ':!*.jsonl' ':!*.tmp')
 
 # ── Diff hash computation ──
-# Hashes the full working-tree diff from merge-base (committed + staged + unstaged).
+# Hashes committed changes only (merge-base..HEAD), excluding working-tree edits.
+# This ensures hash stability while critics run in parallel — uncommitted edits
+# during critic execution don't invalidate evidence. Committing new fixes correctly
+# changes the hash, requiring both critics to re-run on the same committed state.
 # Returns "clean" if no diff, "unknown" if not a git repo.
 
 compute_diff_hash() {
@@ -69,7 +91,7 @@ compute_diff_hash() {
   fi
 
   local diff_output
-  diff_output=$(cd "$cwd" && git diff "$_EVIDENCE_MERGE_BASE" "${_DIFF_EXCLUDES[@]}" 2>/dev/null)
+  diff_output=$(cd "$cwd" && git diff "$_EVIDENCE_MERGE_BASE"..HEAD "${_DIFF_EXCLUDES[@]}" 2>/dev/null)
 
   if [ -z "$diff_output" ]; then
     echo "clean"
@@ -90,7 +112,7 @@ diff_stats() {
 
   # Use --numstat for reliable line counting (handles binary files, renames)
   local numstat
-  numstat=$(cd "$cwd" && git diff --numstat "$_EVIDENCE_MERGE_BASE" "${_DIFF_EXCLUDES[@]}" 2>/dev/null)
+  numstat=$(cd "$cwd" && git diff --numstat "$_EVIDENCE_MERGE_BASE"..HEAD "${_DIFF_EXCLUDES[@]}" 2>/dev/null)
 
   local lines=0 files=0 new_files=0
 
@@ -100,7 +122,7 @@ diff_stats() {
     files=$(echo "$numstat" | wc -l | tr -d ' ')
   fi
 
-  new_files=$(cd "$cwd" && git diff --diff-filter=A --name-only "$_EVIDENCE_MERGE_BASE" "${_DIFF_EXCLUDES[@]}" 2>/dev/null \
+  new_files=$(cd "$cwd" && git diff --diff-filter=A --name-only "$_EVIDENCE_MERGE_BASE"..HEAD "${_DIFF_EXCLUDES[@]}" 2>/dev/null \
     | wc -l | tr -d ' ')
   new_files=${new_files:-0}
 
@@ -109,27 +131,11 @@ diff_stats() {
 
 # ── Evidence writers ──
 
-append_evidence() {
-  local session_id="$1" type="$2" result="$3" cwd="$4"
-  cwd=$(_resolve_cwd "$session_id" "$cwd")
-  local file
-  file=$(evidence_file "$session_id")
+# Atomic append with lock for concurrent sub-agent safety
+_atomic_append() {
+  local file="$1" entry="$2" session_id="$3"
   local lock_file="/tmp/claude-evidence-${session_id}.lock"
-  local diff_hash
-  diff_hash=$(compute_diff_hash "$cwd")
-  local timestamp
-  timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-  local entry
-  entry=$(jq -cn \
-    --arg ts "$timestamp" \
-    --arg type "$type" \
-    --arg result "$result" \
-    --arg hash "$diff_hash" \
-    --arg session "$session_id" \
-    '{timestamp: $ts, type: $type, result: $result, diff_hash: $hash, session: $session}')
-
-  # Atomic append with lock for concurrent sub-agent safety
   if command -v flock >/dev/null 2>&1; then
     (
       flock -x 200
@@ -148,6 +154,68 @@ append_evidence() {
     echo "$entry" >> "$file"
     rmdir "$lock_dir" 2>/dev/null || true
   fi
+}
+
+append_evidence() {
+  local session_id="$1" type="$2" result="$3" cwd="$4"
+  cwd=$(_resolve_cwd "$session_id" "$cwd")
+  local file
+  file=$(evidence_file "$session_id")
+  local diff_hash
+  diff_hash=$(compute_diff_hash "$cwd")
+  local timestamp
+  timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  local entry
+  entry=$(jq -cn \
+    --arg ts "$timestamp" \
+    --arg type "$type" \
+    --arg result "$result" \
+    --arg hash "$diff_hash" \
+    --arg session "$session_id" \
+    '{timestamp: $ts, type: $type, result: $result, diff_hash: $hash, session: $session}')
+
+  _atomic_append "$file" "$entry" "$session_id"
+}
+
+# ── Triage override ──
+# Allows overriding a critic verdict with a rationale when findings are out-of-scope.
+# Only permitted for critic types (code-critic, minimizer). Cannot override codex or PR gates.
+# Records the override in evidence with triage_override flag for audit trail.
+
+append_triage_override() {
+  local session_id="$1" type="$2" rationale="$3" cwd="$4"
+
+  # Guard: only critic types can be overridden
+  case "$type" in
+    code-critic|minimizer) ;;
+    *) echo "ERROR: triage override not allowed for type '$type' (only: code-critic, minimizer)" >&2; return 1 ;;
+  esac
+
+  if [ -z "$rationale" ]; then
+    echo "ERROR: triage override requires a rationale" >&2
+    return 1
+  fi
+
+  cwd=$(_resolve_cwd "$session_id" "$cwd")
+  local file
+  file=$(evidence_file "$session_id")
+  local diff_hash
+  diff_hash=$(compute_diff_hash "$cwd")
+  local timestamp
+  timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  local entry
+  entry=$(jq -cn \
+    --arg ts "$timestamp" \
+    --arg type "$type" \
+    --arg result "APPROVED" \
+    --arg hash "$diff_hash" \
+    --arg session "$session_id" \
+    --arg rationale "$rationale" \
+    '{timestamp: $ts, type: $type, result: $result, diff_hash: $hash, session: $session, triage_override: true, rationale: $rationale}')
+
+  _atomic_append "$file" "$entry" "$session_id"
 }
 
 # ── Evidence readers ──

@@ -118,9 +118,15 @@ case "$MODE" in
     echo "CODEX NEEDS_DISCUSSION — $REASON"
     ;;
 
+  --triage-override)
+    TYPE="${2:?Usage: tmux-codex.sh --triage-override <type> <rationale>}"
+    RATIONALE="${3:?Usage: tmux-codex.sh --triage-override <type> <rationale>}"
+    echo "TRIAGE_OVERRIDE $TYPE | $RATIONALE"
+    ;;
+
   *)
     echo "Error: Unknown mode '$MODE'" >&2
-    echo "Usage: tmux-codex.sh --review|--plan-review|--prompt|--review-complete|--needs-discussion" >&2
+    echo "Usage: tmux-codex.sh --review|--plan-review|--prompt|--review-complete|--needs-discussion|--triage-override" >&2
     exit 1
     ;;
 esac

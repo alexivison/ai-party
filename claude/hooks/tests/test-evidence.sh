@@ -82,19 +82,19 @@ git add readme.md && git commit -q -m "add docs"
 HASH_AFTER=$(compute_diff_hash "$TMPDIR_BASE")
 assert ".md file doesn't change hash" '[ "$HASH_BEFORE" = "$HASH_AFTER" ]'
 
-echo "=== compute_diff_hash: unstaged edit changes hash ==="
+echo "=== compute_diff_hash: unstaged edit does NOT change hash (committed-only) ==="
 HASH_BEFORE=$(compute_diff_hash "$TMPDIR_BASE")
 echo "unstaged edit" >> file.txt
 HASH_AFTER=$(compute_diff_hash "$TMPDIR_BASE")
-assert "Unstaged edit changes hash" '[ "$HASH_BEFORE" != "$HASH_AFTER" ]'
+assert "Unstaged edit does not change hash" '[ "$HASH_BEFORE" = "$HASH_AFTER" ]'
 git checkout -- file.txt  # restore
 
-echo "=== compute_diff_hash: staged-only edit changes hash ==="
+echo "=== compute_diff_hash: staged edit does NOT change hash (committed-only) ==="
 HASH_BEFORE=$(compute_diff_hash "$TMPDIR_BASE")
 echo "staged edit" >> file.txt
 git add file.txt
 HASH_AFTER=$(compute_diff_hash "$TMPDIR_BASE")
-assert "Staged edit changes hash" '[ "$HASH_BEFORE" != "$HASH_AFTER" ]'
+assert "Staged edit does not change hash" '[ "$HASH_BEFORE" = "$HASH_AFTER" ]'
 git reset -q HEAD file.txt && git checkout -- file.txt  # restore
 
 echo "=== compute_diff_hash: not a git repo ==="
@@ -120,7 +120,7 @@ HASH_CLEAN=$(compute_diff_hash "$TMPDIR_BASE")
 assert "merge-base==HEAD, clean tree → 'clean'" '[ "$HASH_CLEAN" = "clean" ]'
 echo "dirty" >> file.txt
 HASH_DIRTY=$(compute_diff_hash "$TMPDIR_BASE")
-assert "merge-base==HEAD, dirty tree → hash (not clean)" '[ "$HASH_DIRTY" != "clean" ] && [ "$HASH_DIRTY" != "unknown" ]'
+assert "merge-base==HEAD, dirty tree → still 'clean' (committed-only)" '[ "$HASH_DIRTY" = "clean" ]'
 git checkout -- file.txt
 
 # ═══ append_evidence ═════════════════════════════════════════════════════════
@@ -246,6 +246,57 @@ echo "/nonexistent/worktree" > "/tmp/claude-worktree-${SESSION}"
 RESOLVED=$(_resolve_cwd "$SESSION" "/fallback/path")
 assert "Bad override → returns hook_cwd" '[ "$RESOLVED" = "/fallback/path" ]'
 rm -f "/tmp/claude-worktree-${SESSION}"
+
+echo "=== _resolve_cwd: override points to different repo (stale cross-project) ==="
+cleanup
+setup_repo
+OTHER_REPO=$(mktemp -d)
+cd "$OTHER_REPO" && git init -q && echo "other" > f.txt && git add f.txt && git commit -q -m "other repo"
+echo "$OTHER_REPO" > "/tmp/claude-worktree-${SESSION}"
+RESOLVED=$(_resolve_cwd "$SESSION" "$TMPDIR_BASE")
+assert "Different repo override → returns hook_cwd" '[ "$RESOLVED" = "$TMPDIR_BASE" ]'
+rm -f "/tmp/claude-worktree-${SESSION}"
+rm -rf "$OTHER_REPO"
+
+echo "=== _resolve_cwd: hook_cwd not a git repo, override valid ==="
+cleanup
+setup_repo
+WORKTREE_DIR=$(mktemp -d)
+cd "$TMPDIR_BASE" && git worktree add "$WORKTREE_DIR" main 2>/dev/null
+echo "$WORKTREE_DIR" > "/tmp/claude-worktree-${SESSION}"
+RESOLVED=$(_resolve_cwd "$SESSION" "/not/a/git/repo")
+assert "Non-git hook_cwd + valid override → trusts override" '[ "$RESOLVED" = "$WORKTREE_DIR" ]'
+rm -f "/tmp/claude-worktree-${SESSION}"
+git -C "$TMPDIR_BASE" worktree remove "$WORKTREE_DIR" 2>/dev/null || rm -rf "$WORKTREE_DIR"
+
+# ═══ append_triage_override ════════════════════════════════════════════════
+
+echo "=== append_triage_override: allowed type creates evidence ==="
+cleanup
+setup_repo
+echo "impl" > impl.sh && git add impl.sh && git commit -q -m "impl"
+append_triage_override "$SESSION" "code-critic" "Out-of-scope: rebased auth files" "$TMPDIR_BASE"
+assert "Triage override creates evidence" 'check_evidence "$SESSION" "code-critic" "$TMPDIR_BASE"'
+EFILE=$(evidence_file "$SESSION")
+assert "Evidence has triage_override flag" '[ "$(tail -1 "$EFILE" | jq -r .triage_override)" = "true" ]'
+assert "Evidence has rationale" '[ "$(tail -1 "$EFILE" | jq -r .rationale)" = "Out-of-scope: rebased auth files" ]'
+assert "Evidence result is APPROVED" '[ "$(tail -1 "$EFILE" | jq -r .result)" = "APPROVED" ]'
+
+echo "=== append_triage_override: disallowed type rejected ==="
+cleanup
+setup_repo
+echo "impl" > impl.sh && git add impl.sh && git commit -q -m "impl"
+OUTPUT=$(append_triage_override "$SESSION" "codex" "trying to bypass" "$TMPDIR_BASE" 2>&1) || true
+assert "Disallowed type returns error" 'echo "$OUTPUT" | grep -q "not allowed"'
+assert "No evidence created for disallowed type" '! check_evidence "$SESSION" "codex" "$TMPDIR_BASE"'
+
+echo "=== append_triage_override: empty rationale rejected ==="
+cleanup
+setup_repo
+echo "impl" > impl.sh && git add impl.sh && git commit -q -m "impl"
+OUTPUT=$(append_triage_override "$SESSION" "minimizer" "" "$TMPDIR_BASE" 2>&1) || true
+assert "Empty rationale returns error" 'echo "$OUTPUT" | grep -q "requires a rationale"'
+assert "No evidence created without rationale" '! check_evidence "$SESSION" "minimizer" "$TMPDIR_BASE"'
 
 # ═══ Worktree scenario (integration) ════════════════════════════════════════
 

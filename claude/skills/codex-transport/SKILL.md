@@ -72,6 +72,16 @@ This reads the findings file and extracts the verdict Codex wrote:
 
 **You CANNOT call `--approve` directly.** The gate hard-blocks it. Approval can only come from Codex via the verdict line in the findings file. This prevents workers from self-approving their own fixes.
 
+### Triage override (out-of-scope critic findings)
+When critics flag out-of-scope code (e.g., from rebase), you can override with a rationale:
+```bash
+~/.claude/skills/codex-transport/scripts/tmux-codex.sh --triage-override <type> "rationale"
+# Example:
+~/.claude/skills/codex-transport/scripts/tmux-codex.sh --triage-override minimizer "Out-of-scope: auth files from PR #65315 landed via rebase, not our changes"
+```
+
+Only critic types (`code-critic`, `minimizer`) can be overridden — codex and PR gates cannot. The override is recorded with a rationale in the evidence log for audit trail. Use sparingly and only for genuinely out-of-scope findings.
+
 ### Signal escalation
 ```bash
 # Unresolvable after max iterations
