@@ -56,7 +56,7 @@ Use the canonical sequence in [execution-core.md](~/.claude/rules/execution-core
       - **BARRIER:** no code edits until both Codex AND adversarial reviewer return.
       - Reviewer findings are advisory (no gating markers).
 9. **Triage findings** — When `[CODEX] Review complete` arrives: read findings, triage by severity. Triage the UNION of Codex + adversarial reviewer findings.
-   - **Blocking findings:** fix code → re-run critics → dispatch new `--review` → `--review-complete`. Editing code auto-invalidates evidence (diff_hash changes).
+   - **Blocking findings:** fix code → commit → dispatch new `--review` → `--review-complete`. No critic re-run needed — phase 2 gate allows re-review after codex has run once.
    - Round 2: if blocking findings remain after second Codex review, escalate `--needs-discussion`.
    - Non-blocking / approved: `--review-complete` reads the verdict from the findings file. Do NOT call `--approve` directly.
 10. **PR Verification** — Invoke `/pre-pr-verification` (runs test-runner + check-runner internally)

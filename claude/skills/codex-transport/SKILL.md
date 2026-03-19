@@ -96,6 +96,7 @@ Only critic types (`code-critic`, `minimizer`) can be overridden — codex and P
 - `--review-complete` emits `CODEX_REVIEW_RAN` only after findings exist.
 - `--needs-discussion` is instant — outputs a sentinel for hook detection.
 - **You cannot self-approve.** Codex decides the verdict via the `VERDICT:` line in the findings file.
-- Before calling `--review`, ensure sub-agent critics have passed (codex-gate.sh enforces this).
+- Before the **first** `--review`, ensure sub-agent critics have passed (codex-gate.sh phase 1 enforces this).
+- After codex has reviewed once, subsequent `--review` calls skip the critic gate (phase 2 — codex validates its own fix requests).
 - `--plan-review` is ungated — no critic markers or codex-ran markers required or affected.
-- **Blocking codex findings:** fix code → (evidence auto-invalidated via diff_hash) → re-run critics → new `--review` → `--review-complete`. No special flag needed.
+- **Blocking codex findings:** fix code → commit → new `--review` → `--review-complete`. No critic re-run needed in phase 2.

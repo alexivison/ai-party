@@ -108,7 +108,7 @@ OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --plan-review PLAN.md /tmp/work')" | 
 assert "gate allows --plan-review without evidence" \
   '! echo "$OUTPUT" | grep -q "deny"'
 
-# Test: stale evidence rejected after code edit
+# Test: stale evidence rejected after code edit (phase 1)
 clean_evidence
 append_evidence "$SESSION_ID" "code-critic" "APPROVED" "$TMPDIR_BASE"
 append_evidence "$SESSION_ID" "minimizer" "APPROVED" "$TMPDIR_BASE"
@@ -117,7 +117,35 @@ cd "$TMPDIR_BASE"
 echo "new code" >> impl.sh
 git add impl.sh && git commit -q -m "stale test"
 OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
-assert "stale evidence rejected after code edit" \
+assert "phase 1: stale critic evidence rejected after code edit" \
+  'echo "$OUTPUT" | grep -q "deny"'
+
+# ═══ Two-phase model ═══════════════════════════════════════════════════════
+
+# Test: phase 2 — codex-ran exists, allows --review without critics
+clean_evidence
+append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
+OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
+assert "phase 2: codex-ran exists → allows --review without critics" \
+  '! echo "$OUTPUT" | grep -q "deny"'
+
+# Test: phase 2 — codex-ran at OLD hash still enables phase 2
+clean_evidence
+cd "$TMPDIR_BASE"
+# Record codex-ran at current hash
+append_evidence "$SESSION_ID" "codex-ran" "COMPLETED" "$TMPDIR_BASE"
+# Change code (new hash)
+echo "fix codex finding" >> impl.sh
+git add impl.sh && git commit -q -m "codex fix"
+# codex-ran is at old hash but phase 2 checks ANY hash
+OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
+assert "phase 2: codex-ran at old hash still allows re-review" \
+  '! echo "$OUTPUT" | grep -q "deny"'
+
+# Test: phase 1 — no codex-ran, no critics → blocked
+clean_evidence
+OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --review main "test"')" | bash "$GATE")
+assert "phase 1: no evidence at all → blocked" \
   'echo "$OUTPUT" | grep -q "deny"'
 
 echo ""

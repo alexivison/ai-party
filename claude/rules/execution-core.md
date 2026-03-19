@@ -45,7 +45,7 @@ Out-of-scope touches without justification are blocking and require `NEEDS_DISCU
 
 Evidence is stored in a per-session JSONL log (`/tmp/claude-evidence-{session_id}.jsonl`). Each entry records a `diff_hash` — SHA-256 of the branch diff from merge-base. Gate hooks compute the current diff_hash and only accept evidence with a matching hash. Editing code after approval automatically invalidates prior evidence (different hash) — no invalidation hook needed.
 
-`codex-gate.sh` blocks `--review` without critic APPROVE evidence, blocks `--approve` without codex-ran evidence. If critics returned REQUEST_CHANGES, you MUST re-run them after fixing — the gate enforces this.
+`codex-gate.sh` enforces a two-phase review model. Phase 1: blocks first `--review` without critic APPROVE evidence. Phase 2: after codex has reviewed once (`codex-ran` exists), allows subsequent `--review` without re-running critics — codex validates its own fix requests. `--approve` is hard-blocked; approval flows through `--review-complete` reading the verdict Codex wrote.
 
 ## Tiered Execution
 
@@ -90,7 +90,7 @@ Classify every finding before acting:
 | code-critic or minimizer | NEEDS_DISCUSSION / oscillation / cap | Ask user | YES |
 | Both critics done, no blocking | — | Run codex | NO |
 | codex | APPROVE | /pre-pr-verification | NO |
-| codex | REQUEST_CHANGES (blocking) | Fix in one batch + re-run critics + new `--review` | NO |
+| codex | REQUEST_CHANGES (blocking) | Fix in one batch + commit + new `--review` (no critic re-run needed — phase 2) | NO |
 | codex | REQUEST_CHANGES (non-blocking) | Record and proceed to /pre-pr-verification | NO |
 | codex | NEEDS_DISCUSSION | Ask user | YES |
 | adversarial reviewer | Any findings | Paladin triages (advisory, no gating markers) | NO |
@@ -133,7 +133,7 @@ Code PRs require evidence matching the current diff_hash. Full tier: pr-verified
 | Approve without --review-complete | Gate blocks — run review first |
 | Edit after approval, then PR | Evidence stale (diff_hash changed) — re-run |
 | Create evidence outside authorized paths | Forbidden — only hooks and workflow skills write evidence via `append_evidence` |
-| Call codex without re-running critics | Gate blocks — re-run critics |
+| Call codex for first review without critic evidence | Gate blocks — run critics first (phase 1) |
 | Third critic/codex round on same diff | Stop and escalate with NEEDS_DISCUSSION |
 | Run lint/typecheck via Bash instead of check-runner | Always delegate to sub-agents — they run the full suite |
 | Push without running check-runner | Run check-runner before every push, no exceptions |

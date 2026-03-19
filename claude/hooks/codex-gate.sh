@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Codex Review Gate Hook
-# Blocks tmux-codex.sh --review unless both critic APPROVE evidence exists.
+# Two-phase model:
+#   Phase 1 (first --review): requires both critic APPROVE evidence.
+#   Phase 2 (re-review after codex fixes): requires codex-ran evidence (critics not re-required).
 # Hard-blocks tmux-codex.sh --approve — workers cannot self-approve.
 # Codex approval flows through --review-complete (verdict in findings file).
 # Uses JSONL evidence log with diff_hash matching.
@@ -42,13 +44,32 @@ EOF
   exit 0
 fi
 
-# Gate 1: --review requires critic APPROVE evidence (not --prompt or verdict modes)
+# Gate 1: --review requires evidence (not --prompt or verdict modes)
 if ! echo "$COMMAND" | grep -qE 'tmux-codex\.sh +--review( |[;&|]|$)'; then
   echo '{}'
   exit 0
 fi
 
-# Check for both critic APPROVE evidence
+# Two-phase gate:
+# - Phase 1 (first review): both critics must APPROVE at current hash
+# - Phase 2 (re-review after codex fixes): codex-ran at ANY hash means codex
+#   already reviewed once — critics did their job in phase 1, skip them.
+CWD=$(_resolve_cwd "$SESSION_ID" "$CWD")
+EVIDENCE_FILE=$(evidence_file "$SESSION_ID")
+CODEX_PREVIOUSLY_RAN=false
+if [ -f "$EVIDENCE_FILE" ]; then
+  if jq -e 'select(.type == "codex-ran")' "$EVIDENCE_FILE" >/dev/null 2>&1; then
+    CODEX_PREVIOUSLY_RAN=true
+  fi
+fi
+
+if $CODEX_PREVIOUSLY_RAN; then
+  # Phase 2: codex already reviewed once — allow re-review without critics
+  echo '{}'
+  exit 0
+fi
+
+# Phase 1: first review — require both critic APPROVE evidence
 MISSING=$(check_all_evidence "$SESSION_ID" "code-critic minimizer" "$CWD" 2>&1 || true)
 
 if [ -n "$MISSING" ]; then
@@ -57,12 +78,12 @@ if [ -n "$MISSING" ]; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: Codex review gate — critic APPROVE evidence missing:$MISSING. Re-run critics before codex review."
+    "permissionDecisionReason": "BLOCKED: Codex review gate (phase 1) — critic APPROVE evidence missing:$MISSING. Re-run critics before first codex review."
   }
 }
 EOF
   exit 0
 fi
 
-# Both evidence present — allow
+# Phase 1 evidence present — allow first review
 echo '{}'
