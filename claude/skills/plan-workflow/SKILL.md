@@ -68,7 +68,10 @@ existing architecture, constraints, user preferences>
 ## Output
 Write the plan to: <plan_path> (e.g., PLAN.md)
 Write task files to: tasks/TASK-*.md (one per discrete task)
-PLAN.md format: Goal, Context, Scope, Tasks (with references to TASK files), Risks, Open Questions.
+PLAN.md format: Goal, Context, Scope, Tasks, Risks, Open Questions.
+PLAN.md Tasks section MUST use checkbox-link form so task-workflow can toggle them:
+  - [ ] [Task 1: Setup](./tasks/TASK-01-setup.md)
+  - [ ] [Task 2: Implementation](./tasks/TASK-02-impl.md)
 TASK*.md format: Goal, In Scope, Out of Scope, Acceptance Criteria, checklist items.
 PROMPT_EOF
 
@@ -152,10 +155,12 @@ The user reviewed the plan at <plan_path> and has feedback:
 <user's feedback, verbatim or faithfully paraphrased>
 
 ## Instructions
-- Read the current plan at <plan_path>
-- Apply the requested changes
+- Read the current plan at <plan_path> and all TASK*.md files in tasks/
+- Apply the requested changes to BOTH PLAN.md and any affected TASK*.md files
+- If feedback changes task boundaries, ordering, or scope: regenerate affected TASK*.md files
 - Write the updated plan to the same path (overwrite)
 - Preserve parts the user didn't comment on
+- Keep PLAN.md checkbox-links and TASK*.md files in sync
 PROMPT_EOF
 
 ~/.claude/skills/codex-transport/scripts/tmux-codex.sh \
