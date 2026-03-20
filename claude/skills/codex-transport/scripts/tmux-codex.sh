@@ -5,7 +5,24 @@ set -euo pipefail
 MODE="${1:?Usage: tmux-codex.sh --review|--plan-review|--prompt|--review-complete|--needs-discussion}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE_DIR="$SCRIPT_DIR/../templates"
 source "$SCRIPT_DIR/../../../../session/party-lib.sh"
+
+# Render a template file by replacing {{VAR}} placeholders.
+# Args: template_file [VAR=value ...]
+_render_template() {
+  local template_file="$1"; shift
+  local content
+  content=$(cat "$template_file")
+  local key val
+  for pair in "$@"; do
+    key="${pair%%=*}"
+    val="${pair#*=}"
+    content="${content//\{\{$key\}\}/$val}"
+  done
+  # Strip lines that are just unreplaced placeholders (conditional sections not filled)
+  echo "$content" | grep -v '^{{.*}}$'
+}
 
 # Session discovery only for modes that need tmux (--review, --prompt).
 # Evidence/escalation modes (--review-complete, --needs-discussion)
@@ -27,21 +44,56 @@ case "$MODE" in
 
   --review)
     _require_session
-    WORK_DIR="${2:?Missing work_dir — pass the worktree/repo path as 2nd argument}"
-    BASE="${3:-main}"
-    TITLE="${4:-Code review}"
+    shift # consume --review
+    # Parse flags and positional args
+    _review_scope=""
+    _review_dispute=""
+    _review_prior=""
+    _review_positional=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --scope) _review_scope="${2:?--scope requires a value}"; shift 2 ;;
+        --dispute) _review_dispute="${2:?--dispute requires a file path}"; shift 2 ;;
+        --prior-findings) _review_prior="${2:?--prior-findings requires a file path}"; shift 2 ;;
+        *) _review_positional+=("$1"); shift ;;
+      esac
+    done
+    WORK_DIR="${_review_positional[0]:?Missing work_dir — pass the worktree/repo path}"
+    BASE="${_review_positional[1]:-main}"
+    TITLE="${_review_positional[2]:-Code review}"
+    # Backward compat: 4th positional arg is treated as --dispute (old 5th-arg form)
+    if [[ -z "$_review_dispute" && -n "${_review_positional[3]:-}" ]]; then
+      _review_dispute="${_review_positional[3]}"
+    fi
     FINDINGS_FILE="$STATE_DIR/codex-findings-$(date +%s%N).toon"
 
-    # Resolve tmux-claude.sh path for the notification callback
     NOTIFY_SCRIPT="$(cd "$SCRIPT_DIR/../../../../codex/skills/claude-transport/scripts" && pwd)/tmux-claude.sh"
+    NOTIFY_CMD="$NOTIFY_SCRIPT \"Review complete. Findings at: $FINDINGS_FILE\""
 
-    DISPUTE_FILE="${5:-}"
-
-    MSG="[CLAUDE] cd '$WORK_DIR' && Review the changes on this branch against $BASE. Title: $TITLE. Write TOON findings to: $FINDINGS_FILE. Emit raw TOON file contents only; no markdown fences. IMPORTANT: End the findings file with a verdict line — exactly 'VERDICT: APPROVED' if no blocking findings, or 'VERDICT: REQUEST_CHANGES' if there are blocking findings."
-    if [[ -n "$DISPUTE_FILE" && -f "$DISPUTE_FILE" ]]; then
-      MSG="$MSG DISPUTE CONTEXT: Read dismissed findings and rationales from: $DISPUTE_FILE before reviewing. For each dismissed finding: accept if the rationale is valid (drop from findings), or challenge with a specific file:line reference if the rationale is invalid. Do NOT re-raise accepted dismissals."
+    # Build conditional sections (printf for real newlines)
+    SCOPE_SECTION=""
+    if [[ -n "$_review_scope" ]]; then
+      SCOPE_SECTION=$(printf '## Scope\n\nOnly review changes within this scope: %s\nFindings outside this scope should be classified as out-of-scope and omitted.' "$_review_scope")
     fi
-    MSG="$MSG — When done, run: $NOTIFY_SCRIPT \"Review complete. Findings at: $FINDINGS_FILE\""
+    DISPUTE_SECTION=""
+    if [[ -n "$_review_dispute" && -f "$_review_dispute" ]]; then
+      DISPUTE_SECTION=$(printf '## Dispute Context\n\nRead dismissed findings and rationales from: %s\nFor each dismissed finding: accept if the rationale is valid (drop from findings), or challenge with a specific file:line reference if invalid. Do NOT re-raise accepted dismissals.' "$_review_dispute")
+    fi
+    REREVEW_SECTION=""
+    if [[ -n "$_review_prior" && -f "$_review_prior" ]]; then
+      REREVEW_SECTION=$(printf '## Re-review\n\nThis is a re-review. Prior findings at: %s\nFocus on whether blocking issues were addressed. Do NOT re-raise findings that were already fixed. Flag only genuinely NEW issues.' "$_review_prior")
+    fi
+
+    MSG=$(_render_template "$TEMPLATE_DIR/review.md" \
+      "WORK_DIR=$WORK_DIR" \
+      "BASE=$BASE" \
+      "TITLE=$TITLE" \
+      "FINDINGS_FILE=$FINDINGS_FILE" \
+      "NOTIFY_CMD=$NOTIFY_CMD" \
+      "SCOPE_SECTION=$SCOPE_SECTION" \
+      "DISPUTE_SECTION=$DISPUTE_SECTION" \
+      "REREVEW_SECTION=$REREVEW_SECTION")
+
     if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:review"; then
       echo "CODEX_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."
@@ -60,8 +112,14 @@ case "$MODE" in
     FINDINGS_FILE="$STATE_DIR/codex-plan-findings-$(date +%s%N).toon"
 
     NOTIFY_SCRIPT="$(cd "$SCRIPT_DIR/../../../../codex/skills/claude-transport/scripts" && pwd)/tmux-claude.sh"
+    NOTIFY_CMD="$NOTIFY_SCRIPT \"Plan review complete. Findings at: $FINDINGS_FILE\""
 
-    MSG="[CLAUDE] cd '$WORK_DIR' && Review '$PLAN_PATH' for architecture soundness and execution feasibility. Write TOON findings to: $FINDINGS_FILE. Emit raw TOON file contents only; no markdown fences. — When done, run: $NOTIFY_SCRIPT \"Plan review complete. Findings at: $FINDINGS_FILE\""
+    MSG=$(_render_template "$TEMPLATE_DIR/plan-review.md" \
+      "WORK_DIR=$WORK_DIR" \
+      "PLAN_PATH=$PLAN_PATH" \
+      "FINDINGS_FILE=$FINDINGS_FILE" \
+      "NOTIFY_CMD=$NOTIFY_CMD")
+
     if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:plan-review"; then
       echo "CODEX_PLAN_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."

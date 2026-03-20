@@ -30,9 +30,16 @@ Use the transport script:
 ### Request code review (non-blocking)
 After implementing changes and passing sub-agent critics:
 ```bash
-~/.claude/skills/codex-transport/scripts/tmux-codex.sh --review <work_dir> [base_branch] ["PR title"] [dispute_context_file]
+~/.claude/skills/codex-transport/scripts/tmux-codex.sh --review <work_dir> [base_branch] ["PR title"] [flags...]
 ```
-`work_dir` is **REQUIRED** — the absolute path to the worktree or repo where changes live. The script will error if omitted. Codex's pane is in a different directory; it needs this to `cd` into the correct location. `base_branch` defaults to `main`, `PR title` defaults to `Code review`. `dispute_context_file` is optional — path to a file with dismissed findings and rationales for re-reviews (see Dispute Resolution below).
+`work_dir` is **REQUIRED** — the absolute path to the worktree or repo where changes live. `base_branch` defaults to `main`, `PR title` defaults to `Code review`.
+
+**Optional flags** (can appear anywhere after `--review`):
+- `--scope "description"` — scope boundaries for the review. Codex omits out-of-scope findings.
+- `--dispute /path/to/context.md` — dismissed findings with rationales for re-reviews (see Dispute Resolution below).
+- `--prior-findings /path/to/prior.toon` — prior findings file for re-reviews. Codex focuses on whether blocking issues were addressed.
+
+The review prompt is rendered from `templates/review.md`. Conditional sections activate only when the corresponding flag is passed.
 
 This sends a message to Codex's pane. You are NOT blocked — continue with non-edit work while Codex reviews. Codex will notify you via `[CODEX] Review complete. Findings at: <path>` when done. Findings are raw TOON (`.toon` file, no markdown fences). Handle that message per your `tmux-handler` skill.
 
