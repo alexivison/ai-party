@@ -99,6 +99,19 @@ Claude asks you to investigate or work on something.
 2. Write results to the file path specified (if given)
 3. Notify Claude: `tmux-claude.sh "Task complete. Response at: <path>"`
 
+### NEEDS_DISCUSSION debate (via --prompt)
+Claude sends a structured position on a disputed finding — either from your review or a critic's.
+
+1. Read Claude's position: it will state concede, counter-argue, or propose compromise, with evidence
+2. Evaluate the evidence against the codebase:
+   - If Claude's position is well-supported (concrete file:line, diff evidence) → **concede** explicitly
+   - If Claude's position has gaps → **counter** with your own file:line evidence showing why the finding stands
+   - If both positions have merit → **propose compromise** (e.g., "fix X but defer Y")
+3. Responses must be evidence-based — "I still think this is wrong" without a file:line reference is not a valid counter
+4. **Cap: 2 exchanges.** If unresolved after 2 rounds, state your final position clearly so Claude can escalate to the user with both sides summarized
+5. Write response to the specified path
+6. Notify Claude: `tmux-claude.sh "Task complete. Response at: <path>"`
+
 ### Plan review request
 Claude shares a plan and asks for your assessment.
 

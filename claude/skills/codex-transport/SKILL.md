@@ -30,9 +30,9 @@ Use the transport script:
 ### Request code review (non-blocking)
 After implementing changes and passing sub-agent critics:
 ```bash
-~/.claude/skills/codex-transport/scripts/tmux-codex.sh --review <work_dir> [base_branch] ["PR title"]
+~/.claude/skills/codex-transport/scripts/tmux-codex.sh --review <work_dir> [base_branch] ["PR title"] [dispute_context_file]
 ```
-`work_dir` is **REQUIRED** — the absolute path to the worktree or repo where changes live. The script will error if omitted. Codex's pane is in a different directory; it needs this to `cd` into the correct location. `base_branch` defaults to `main`, `PR title` defaults to `Code review`.
+`work_dir` is **REQUIRED** — the absolute path to the worktree or repo where changes live. The script will error if omitted. Codex's pane is in a different directory; it needs this to `cd` into the correct location. `base_branch` defaults to `main`, `PR title` defaults to `Code review`. `dispute_context_file` is optional — path to a file with dismissed findings and rationales for re-reviews (see Dispute Resolution below).
 
 This sends a message to Codex's pane. You are NOT blocked — continue with non-edit work while Codex reviews. Codex will notify you via `[CODEX] Review complete. Findings at: <path>` when done. Findings are raw TOON (`.toon` file, no markdown fences). Handle that message per your `tmux-handler` skill.
 
@@ -89,6 +89,9 @@ Only critic types (`code-critic`, `minimizer`) can be overridden — codex and P
 ```
 
 **Blocking findings?** Fix the code, re-run critics, then dispatch a new `--review`. Editing code invalidates all evidence (diff_hash changes), so the full cascade re-runs naturally. There is no shortcut — the gates enforce it.
+
+### Dispute resolution
+For out-of-scope Codex findings or NEEDS_DISCUSSION, see [execution-core.md § Dispute Resolution](~/.claude/rules/execution-core.md#dispute-resolution). The `--review` mode accepts an optional 5th arg (dispute context file path) for this flow.
 
 ## Important
 

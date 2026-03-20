@@ -35,7 +35,13 @@ case "$MODE" in
     # Resolve tmux-claude.sh path for the notification callback
     NOTIFY_SCRIPT="$(cd "$SCRIPT_DIR/../../../../codex/skills/claude-transport/scripts" && pwd)/tmux-claude.sh"
 
-    MSG="[CLAUDE] cd '$WORK_DIR' && Review the changes on this branch against $BASE. Title: $TITLE. Write TOON findings to: $FINDINGS_FILE. Emit raw TOON file contents only; no markdown fences. IMPORTANT: End the findings file with a verdict line — exactly 'VERDICT: APPROVED' if no blocking findings, or 'VERDICT: REQUEST_CHANGES' if there are blocking findings. — When done, run: $NOTIFY_SCRIPT \"Review complete. Findings at: $FINDINGS_FILE\""
+    DISPUTE_FILE="${5:-}"
+
+    MSG="[CLAUDE] cd '$WORK_DIR' && Review the changes on this branch against $BASE. Title: $TITLE. Write TOON findings to: $FINDINGS_FILE. Emit raw TOON file contents only; no markdown fences. IMPORTANT: End the findings file with a verdict line — exactly 'VERDICT: APPROVED' if no blocking findings, or 'VERDICT: REQUEST_CHANGES' if there are blocking findings."
+    if [[ -n "$DISPUTE_FILE" && -f "$DISPUTE_FILE" ]]; then
+      MSG="$MSG DISPUTE CONTEXT: Read dismissed findings and rationales from: $DISPUTE_FILE before reviewing. For each dismissed finding: accept if the rationale is valid (drop from findings), or challenge with a specific file:line reference if the rationale is invalid. Do NOT re-raise accepted dismissals."
+    fi
+    MSG="$MSG — When done, run: $NOTIFY_SCRIPT \"Review complete. Findings at: $FINDINGS_FILE\""
     if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:review"; then
       echo "CODEX_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."

@@ -98,3 +98,7 @@ Message: `[CODEX] Plan review complete. Findings at: <path>`
 2. Validate per the triage checklist above
 3. Triage findings same as code review (blocking / non-blocking / out-of-scope)
 4. Incorporate feedback into the plan
+
+## Dispute Resolution
+
+When Codex or critics return out-of-scope findings or NEEDS_DISCUSSION, follow the dispute resolution protocol in [execution-core.md § Dispute Resolution](~/.claude/rules/execution-core.md#dispute-resolution). Key points: critic disputes re-run with context, Codex disputes use dispute context file as 5th arg to `--review`, NEEDS_DISCUSSION debates via `--prompt`. Max 2 dispute rounds before user escalation. After resolution, a fresh `--review` → `--review-complete` is still required for gate evidence.
