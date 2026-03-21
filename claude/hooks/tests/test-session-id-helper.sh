@@ -54,6 +54,14 @@ FOUND_SID=$(discover_session_id "$TMPDIR_BASE")
 assert "Discovers session ID from worktree override" \
   '[ "$FOUND_SID" = "$TEST_SID" ]'
 
+echo "=== Strategy 2: discovers session from subdirectory ==="
+SUBDIR="$TMPDIR_BASE/subdir/nested"
+mkdir -p "$SUBDIR"
+echo "$TMPDIR_BASE" > "/tmp/claude-worktree-${TEST_SID}"
+FOUND_SID=$(discover_session_id "$SUBDIR")
+assert "Discovers session ID from subdirectory of repo" \
+  '[ "$FOUND_SID" = "$TEST_SID" ]'
+
 echo "=== Strategy 2: ignores empty override files ==="
 echo "" > "/tmp/claude-worktree-${TEST_SID}"
 FOUND_SID=$(discover_session_id "$TMPDIR_BASE" 2>/dev/null || echo "")

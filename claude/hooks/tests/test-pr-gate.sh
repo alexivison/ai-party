@@ -127,6 +127,24 @@ OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
 assert "PR with Makefile requires evidence" \
   'echo "$OUTPUT" | grep -q "deny"'
 
+echo "=== Docs-only bypass: go.mod requires evidence ==="
+setup_repo
+clean_evidence
+echo "module example.com/foo" > go.mod
+git add go.mod && git commit -q -m "add go.mod"
+OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
+assert "PR with go.mod requires evidence" \
+  'echo "$OUTPUT" | grep -q "deny"'
+
+echo "=== Docs-only bypass: package-lock.json requires evidence ==="
+setup_repo
+clean_evidence
+echo '{"lockfileVersion":3}' > package-lock.json
+git add package-lock.json && git commit -q -m "add lockfile"
+OUTPUT=$(echo "$(gate_input)" | bash "$GATE")
+assert "PR with package-lock.json requires evidence" \
+  'echo "$OUTPUT" | grep -q "deny"'
+
 # ═══ Full gate tests ════════════════════════════════════════════════════════
 
 echo "=== Full gate: blocks when evidence missing ==="

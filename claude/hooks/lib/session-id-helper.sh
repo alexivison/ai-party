@@ -16,12 +16,13 @@
 discover_session_id() {
   local cwd="${1:-$(pwd)}"
 
-  # Strategy 1: Check party session manifest (most reliable in party sessions)
+  # Strategy 1: Check party state file (most reliable in party sessions)
   if [ -n "${CLAUDE_PARTY_SESSION:-}" ]; then
-    local manifest="/tmp/party-${CLAUDE_PARTY_SESSION}/manifest.json"
-    if [ -f "$manifest" ]; then
+    local state_root="${PARTY_STATE_ROOT:-$HOME/.party-state}"
+    local state_file="${state_root}/${CLAUDE_PARTY_SESSION}.json"
+    if [ -f "$state_file" ]; then
       local sid
-      sid=$(jq -r '.claude_session_id // empty' "$manifest" 2>/dev/null)
+      sid=$(jq -r '.claude_session_id // empty' "$state_file" 2>/dev/null)
       if [ -n "$sid" ]; then
         echo "$sid"
         return 0
@@ -29,25 +30,26 @@ discover_session_id() {
     fi
   fi
 
-  # Strategy 2: Find worktree override files that point to our cwd
-  local resolved_cwd
-  resolved_cwd=$(cd "$cwd" 2>/dev/null && pwd -P) || return 1
+  # Strategy 2: Find worktree override files whose repo root matches ours
+  local cwd_repo_root
+  cwd_repo_root=$(cd "$cwd" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || true
 
-  for f in /tmp/claude-worktree-*; do
-    [ -f "$f" ] || continue
-    local override_path
-    override_path=$(cat "$f")
-    if [ -n "$override_path" ] && [ -d "$override_path" ]; then
-      local resolved_override
-      resolved_override=$(cd "$override_path" 2>/dev/null && pwd -P) || continue
-      if [ "$resolved_override" = "$resolved_cwd" ]; then
-        # Extract session ID from filename: /tmp/claude-worktree-{session_id}
-        local sid="${f#/tmp/claude-worktree-}"
-        echo "$sid"
-        return 0
+  if [ -n "$cwd_repo_root" ]; then
+    for f in /tmp/claude-worktree-*; do
+      [ -f "$f" ] || continue
+      local override_path
+      override_path=$(cat "$f")
+      if [ -n "$override_path" ] && [ -d "$override_path" ]; then
+        local override_root
+        override_root=$(cd "$override_path" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || continue
+        if [ "$override_root" = "$cwd_repo_root" ]; then
+          local sid="${f#/tmp/claude-worktree-}"
+          echo "$sid"
+          return 0
+        fi
       fi
-    fi
-  done
+    done
+  fi
 
   # Strategy 3: Find evidence files and match by repo
   local repo_root
