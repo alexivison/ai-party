@@ -48,6 +48,7 @@ fi
 
 # Gate 1: --review requires evidence (not --prompt or verdict modes)
 if ! echo "$COMMAND" | grep -qE 'tmux-codex\.sh +--review( |[;&|]|$)'; then
+  hook_log "codex-gate" "$SESSION_ID" "allow" "non-review codex command — no gate"
   echo '{}'
   exit 0
 fi

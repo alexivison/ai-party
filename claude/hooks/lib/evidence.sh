@@ -11,7 +11,8 @@
 # ── Shell guard: evidence.sh requires bash ──
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "ERROR: evidence.sh must be sourced from bash, not ${ZSH_VERSION:+zsh }${0##*/}. The flock/fd-redirect syntax is bash-specific." >&2
-  return 1 2>/dev/null || exit 1
+  # shellcheck disable=SC2317
+  return 1 2>/dev/null || exit 1  # exit is reachable when executed (not sourced)
 fi
 
 # ── Hook trace logging ──

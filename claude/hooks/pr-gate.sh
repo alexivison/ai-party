@@ -46,6 +46,7 @@ if echo "$COMMAND" | grep -qE 'gh pr create'; then
 
   # Docs/config-only PRs skip the gate entirely (empty = no impl files found)
   if [ -z "$IMPL_FILES" ]; then
+    hook_log "pr-gate" "$SESSION_ID" "allow" "docs-only PR — gate bypassed"
     echo '{}'
     exit 0
   fi
