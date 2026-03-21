@@ -7,7 +7,10 @@
 # Triggered: PreToolUse on Bash tool
 # Outputs JSON on all paths (required by hook runner when sharing a hook group)
 
+source "$(dirname "$0")/lib/evidence.sh"
+
 INPUT=$(cat)
+_WG_SESSION=$(echo "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)
 if ! COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null); then
     echo '{}'
     exit 0
@@ -23,6 +26,7 @@ fi
 # Only block explicit in-place mutation commands (sed -i, awk inplace).
 # Redirect operators (>, >>) are too common in read-only shell (>/dev/null, etc.) to block broadly.
 if echo "$COMMAND" | grep -qE 'sed\s+-i|awk\s.*-i\s*inplace'; then
+    hook_log "worktree-guard" "$_WG_SESSION" "deny" "bash file edit blocked"
     cat << 'GUARD_EOF'
 {
   "hookSpecificOutput": {
@@ -124,6 +128,7 @@ elif [ -n "$START_POINT" ] && ! echo "$START_POINT" | grep -qE "$SAFE_REF"; then
 fi
 
 if [ "$DENY" = true ]; then
+  hook_log "worktree-guard" "$_WG_SESSION" "deny" "branch switch blocked (unparseable)"
   jq -cn \
     --arg reason "BLOCKED: Branch switching in main worktree. Use: git worktree add ../${REPO_NAME}-<branch> [-b] <branch>" \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
@@ -140,6 +145,7 @@ else
 fi
 [ -n "$START_POINT" ] && SUGGESTED="${SUGGESTED} ${START_POINT}"
 
+hook_log "worktree-guard" "$_WG_SESSION" "deny" "branch switch blocked: $BRANCH"
 jq -cn \
   --arg reason "BLOCKED: Cannot switch/create branches in main worktree. Use: ${SUGGESTED} — then operate from ${WORKTREE_PATH} for all subsequent commands." \
   '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
