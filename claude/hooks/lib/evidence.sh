@@ -8,6 +8,28 @@
 #
 # Usage: source "$(dirname "$0")/lib/evidence.sh"
 
+# ── Shell guard: evidence.sh requires bash ──
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "ERROR: evidence.sh must be sourced from bash, not ${ZSH_VERSION:+zsh }${0##*/}. The flock/fd-redirect syntax is bash-specific." >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+# ── Hook trace logging ──
+# Append-only log for hook observability. Every hook should call this.
+# Args: hook_name session_id outcome [details]
+
+_HOOK_TRACE_LOG="${HOME}/.claude/logs/hook-trace.log"
+
+hook_log() {
+  local hook_name="${1:-unknown}" session_id="${2:-unknown}" outcome="${3:-unknown}" details="${4:-}"
+  local ts
+  ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  mkdir -p "$(dirname "$_HOOK_TRACE_LOG")"
+  local line="${ts} | ${hook_name} | ${session_id} | ${outcome}"
+  [ -n "$details" ] && line="${line} | ${details}"
+  echo "$line" >> "$_HOOK_TRACE_LOG"
+}
+
 # ── Path helpers ──
 
 evidence_file() {
@@ -137,10 +159,13 @@ _atomic_append() {
   local lock_file="/tmp/claude-evidence-${session_id}.lock"
 
   if command -v flock >/dev/null 2>&1; then
+    # Use exec to open the fd inside the subshell — avoids the bare
+    # `200>"$lock_file"` redirect on the closing paren which is a zsh parse error.
     (
+      exec 200>"$lock_file"
       flock -x 200
       echo "$entry" >> "$file"
-    ) 200>"$lock_file"
+    )
   else
     # Spin-lock using mkdir (atomic on all platforms)
     local lock_dir="${lock_file}.d"
@@ -282,16 +307,37 @@ check_evidence() {
 check_all_evidence() {
   local session_id="$1" types_string="$2" cwd="$3"
   local missing=""
+  local diagnostics=""
+  # Lazy-computed on first miss to avoid redundant git calls when all evidence is present
+  local _diag_hash="" _diag_file=""
 
   # Split space-separated types
   for type in $types_string; do
     if ! check_evidence "$session_id" "$type" "$cwd"; then
       missing="$missing $type"
+      # Stale diagnostic: compute hash lazily on first miss
+      if [ -z "$_diag_hash" ]; then
+        local resolved_cwd
+        resolved_cwd=$(_resolve_cwd "$session_id" "$cwd")
+        _diag_hash=$(compute_diff_hash "$resolved_cwd")
+        _diag_file=$(evidence_file "$session_id")
+      fi
+      if [ -f "$_diag_file" ] && [ "$_diag_hash" != "unknown" ]; then
+        local stale_hash
+        stale_hash=$(jq -r --arg type "$type" \
+          'select(.type == $type) | .diff_hash' "$_diag_file" 2>/dev/null | tail -1)
+        if [ -n "$stale_hash" ] && [ "$stale_hash" != "$_diag_hash" ]; then
+          diagnostics="${diagnostics}\n  ${type}: exists at stale hash ${stale_hash:0:12}… but current code is at ${_diag_hash:0:12}… — re-run to refresh"
+        fi
+      fi
     fi
   done
 
   if [ -n "$missing" ]; then
     echo "$missing"
+    if [ -n "$diagnostics" ]; then
+      echo -e "$diagnostics" >&2
+    fi
     return 1
   fi
   return 0

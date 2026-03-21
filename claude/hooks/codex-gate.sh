@@ -19,6 +19,7 @@ CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 
 # Fail open if we can't parse input
 if [ -z "$SESSION_ID" ] || [ -z "$COMMAND" ]; then
+  hook_log "codex-gate" "${SESSION_ID:-unknown}" "allow" "missing session_id or command — fail open"
   echo '{}'
   exit 0
 fi
@@ -32,6 +33,7 @@ fi
 # Gate 2: --approve is BLOCKED — only Codex can approve (via verdict in findings file)
 # Workers must use --review-complete <findings_file>, which reads the verdict Codex wrote.
 if echo "$COMMAND" | grep -qE 'tmux-codex\.sh +--approve'; then
+  hook_log "codex-gate" "$SESSION_ID" "deny" "--approve blocked"
   cat << EOF
 {
   "hookSpecificOutput": {
@@ -69,6 +71,7 @@ if [ -n "$HAS_CODEX_RAN" ]; then
   # (defense-in-depth — phase 1 already enforced this before codex-ran existed).
   if jq -e 'select(.type == "code-critic")' "$EVIDENCE_FILE" >/dev/null 2>&1 && \
      jq -e 'select(.type == "minimizer")' "$EVIDENCE_FILE" >/dev/null 2>&1; then
+    hook_log "codex-gate" "$SESSION_ID" "allow" "phase 2 — codex re-review"
     echo '{}'
     exit 0
   fi
@@ -76,20 +79,20 @@ if [ -n "$HAS_CODEX_RAN" ]; then
 fi
 
 # Phase 1: first review — require both critic APPROVE evidence
-MISSING=$(check_all_evidence "$SESSION_ID" "code-critic minimizer" "$CWD" 2>&1 || true)
+DIAG_FILE=$(mktemp 2>/dev/null || echo "/tmp/codex-gate-diag-$$")
+MISSING=$(check_all_evidence "$SESSION_ID" "code-critic minimizer" "$CWD" 2>"$DIAG_FILE" || true)
+STALE_DIAG=""
+[ -f "$DIAG_FILE" ] && STALE_DIAG=$(cat "$DIAG_FILE") && rm -f "$DIAG_FILE"
 
 if [ -n "$MISSING" ]; then
-  cat << EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: Codex review gate (phase 1) — critic APPROVE evidence missing:$MISSING. Re-run critics before first codex review."
-  }
-}
-EOF
+  REASON="BLOCKED: Codex review gate (phase 1) — critic APPROVE evidence missing:$MISSING. Re-run critics before first codex review."
+  [ -n "$STALE_DIAG" ] && REASON="${REASON}${STALE_DIAG}"
+  hook_log "codex-gate" "$SESSION_ID" "deny" "phase 1 missing:$MISSING"
+  jq -cn --arg reason "$REASON" \
+    '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
   exit 0
 fi
 
 # Phase 1 evidence present — allow first review
+hook_log "codex-gate" "$SESSION_ID" "allow" "phase 1 — first review"
 echo '{}'

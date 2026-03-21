@@ -21,6 +21,7 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 
 # Fail open if we can't parse input
 if [ -z "$SESSION_ID" ]; then
+  hook_log "pr-gate" "unknown" "allow" "no session_id — fail open"
   echo '{}'
   exit 0
 fi
@@ -86,21 +87,23 @@ if echo "$COMMAND" | grep -qE 'gh pr create'; then
     fi
   fi
 
-  MISSING=$(check_all_evidence "$SESSION_ID" "$REQUIRED" "$CWD" 2>&1 || true)
+  DIAG_FILE=$(mktemp 2>/dev/null || echo "/tmp/pr-gate-diag-$$")
+  MISSING=$(check_all_evidence "$SESSION_ID" "$REQUIRED" "$CWD" 2>"$DIAG_FILE" || true)
+  STALE_DIAG=""
+  [ -f "$DIAG_FILE" ] && STALE_DIAG=$(cat "$DIAG_FILE") && rm -f "$DIAG_FILE"
 
   if [ -n "$MISSING" ]; then
-    cat << EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "deny",
-    "permissionDecisionReason": "BLOCKED: PR gate requirements not met. Missing:$MISSING. Complete all workflow steps before creating PR."
-  }
-}
-EOF
+    REASON="BLOCKED: PR gate requirements not met. Missing:$MISSING. Complete all workflow steps before creating PR."
+    [ -n "$STALE_DIAG" ] && REASON="${REASON}${STALE_DIAG}"
+    hook_log "pr-gate" "$SESSION_ID" "deny" "missing:$MISSING"
+    jq -cn --arg reason "$REASON" \
+      '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
     exit 0
   fi
+
+  hook_log "pr-gate" "$SESSION_ID" "allow" "pr-create passed"
 fi
 
 # Allow by default
+hook_log "pr-gate" "$SESSION_ID" "allow" ""
 echo '{}'

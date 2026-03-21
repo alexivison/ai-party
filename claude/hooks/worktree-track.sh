@@ -6,6 +6,8 @@
 #
 # Triggered: PostToolUse on Bash tool
 
+source "$(dirname "$0")/lib/evidence.sh"
+
 hook_input=$(cat)
 
 command=$(echo "$hook_input" | jq -r '.tool_input.command // ""' 2>/dev/null)
@@ -70,6 +72,9 @@ fi
 # Guard: never write empty or whitespace-only paths to the override file
 if [ -n "$worktree_path" ] && [ -d "$worktree_path" ]; then
   echo "$worktree_path" > "/tmp/claude-worktree-${session_id}"
+  hook_log "worktree-track" "$session_id" "allow" "tracked worktree: $worktree_path"
+else
+  hook_log "worktree-track" "$session_id" "allow" "no valid worktree path extracted"
 fi
 
 echo '{}'

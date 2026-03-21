@@ -17,6 +17,7 @@ source "$(dirname "$0")/lib/evidence.sh"
 hook_input=$(cat)
 
 if ! echo "$hook_input" | jq -e . >/dev/null 2>&1; then
+  hook_log "agent-trace-stop" "unknown" "error" "invalid JSON input"
   exit 0
 fi
 
@@ -93,6 +94,7 @@ trace_entry=$(jq -cn \
 
 echo "$trace_entry" >> "$TRACE_FILE"
 echo "$timestamp | STOP  | $agent_type | $verdict | $agent_id | $session_id" >> "$HOME/.claude/logs/evidence-trace.log"
+hook_log "agent-trace-stop" "$session_id" "allow" "agent=$agent_type verdict=$verdict"
 
 # ── Evidence for PR gate enforcement ──
 
