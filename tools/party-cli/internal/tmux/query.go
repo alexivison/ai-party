@@ -1,0 +1,159 @@
+package tmux
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+var (
+	// ErrRoleNotFound is returned when no pane matches the requested role.
+	ErrRoleNotFound = errors.New("role not found")
+	// ErrRoleAmbiguous is returned when multiple panes match the requested role.
+	ErrRoleAmbiguous = errors.New("ambiguous role: multiple panes match")
+)
+
+// ListSessions returns the names of all live tmux sessions.
+func (c *Client) ListSessions(ctx context.Context) ([]string, error) {
+	out, err := c.runner.Run(ctx, "list-sessions", "-F", "#{session_name}")
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	if out == "" {
+		return nil, nil //nolint:nilnil
+	}
+	return strings.Split(out, "\n"), nil
+}
+
+// ListPanes returns all panes in a session across all windows with their role metadata.
+func (c *Client) ListPanes(ctx context.Context, sessionID string) ([]Pane, error) {
+	out, err := c.runner.Run(ctx,
+		"list-panes", "-s", "-t", sessionID,
+		"-F", "#{window_index} #{pane_index} #{@party_role}",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list panes for %s: %w", sessionID, err)
+	}
+	if out == "" {
+		return nil, nil //nolint:nilnil
+	}
+	return parsePanes(sessionID, out)
+}
+
+// ResolveRole finds the pane with the given @party_role using window-aware lookup.
+// If preferredWindow >= 0, that window is searched first; duplicate roles across
+// different windows are allowed (matching party-lib.sh semantics). Ambiguity is
+// only reported when multiple panes share the role within the same searched scope.
+// Pass preferredWindow < 0 to search all windows without preference.
+func (c *Client) ResolveRole(ctx context.Context, sessionID, role string, preferredWindow int) (string, error) {
+	panes, err := c.ListPanes(ctx, sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	// Search preferred window first when specified.
+	if preferredWindow >= 0 {
+		target, err := resolveInWindow(panes, role, preferredWindow, sessionID)
+		if err == nil {
+			return target, nil
+		}
+		if !errors.Is(err, ErrRoleNotFound) {
+			return "", err
+		}
+		// Not found in preferred window — fall through to remaining windows.
+	}
+
+	// Search remaining windows, pick the lowest-indexed unambiguous match.
+	windowMatches := groupByWindow(panes, role, preferredWindow)
+	if len(windowMatches) == 0 {
+		return "", fmt.Errorf("%w: %q in session %s", ErrRoleNotFound, role, sessionID)
+	}
+	var best *Pane
+	for _, matches := range windowMatches {
+		if len(matches) != 1 {
+			continue
+		}
+		if best == nil || matches[0].WindowIndex < best.WindowIndex {
+			best = &matches[0]
+		}
+	}
+	if best != nil {
+		return best.Target(), nil
+	}
+	return "", fmt.Errorf("%w: %q in session %s", ErrRoleAmbiguous, role, sessionID)
+}
+
+// resolveInWindow searches for a role within a single window.
+func resolveInWindow(panes []Pane, role string, window int, sessionID string) (string, error) {
+	var matches []Pane
+	for _, p := range panes {
+		if p.WindowIndex == window && p.Role == role {
+			matches = append(matches, p)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("%w: %q in window %d of session %s", ErrRoleNotFound, role, window, sessionID)
+	case 1:
+		return matches[0].Target(), nil
+	default:
+		return "", fmt.Errorf("%w: %q found %d times in window %d of session %s",
+			ErrRoleAmbiguous, role, len(matches), window, sessionID)
+	}
+}
+
+// groupByWindow groups panes matching a role by window index, excluding skipWindow.
+func groupByWindow(panes []Pane, role string, skipWindow int) map[int][]Pane {
+	result := make(map[int][]Pane)
+	for _, p := range panes {
+		if p.Role == role && p.WindowIndex != skipWindow {
+			result[p.WindowIndex] = append(result[p.WindowIndex], p)
+		}
+	}
+	return result
+}
+
+// parsePanes parses tmux list-panes output into Pane structs.
+// Expected format per line: "window_index pane_index role"
+func parsePanes(sessionID, output string) ([]Pane, error) {
+	lines := strings.Split(output, "\n")
+	panes := make([]Pane, 0, len(lines))
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Format: "window_index pane_index [role]"
+		// Role may be empty if @party_role is not set.
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) < 2 {
+			continue
+		}
+
+		winIdx, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return nil, fmt.Errorf("parse window index %q: %w", parts[0], err)
+		}
+		paneIdx, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("parse pane index %q: %w", parts[1], err)
+		}
+
+		role := ""
+		if len(parts) == 3 {
+			role = parts[2]
+		}
+
+		panes = append(panes, Pane{
+			SessionName: sessionID,
+			WindowIndex: winIdx,
+			PaneIndex:   paneIdx,
+			Role:        role,
+		})
+	}
+	return panes, nil
+}
