@@ -263,23 +263,20 @@ func (s *Service) setResumeEnv(ctx context.Context, sessionID, claudeID, codexID
 }
 
 // setCleanupHook registers the session-closed hook for cleanup.
-// On session close: deregister from parent, remove runtime dir, then delete manifest
-// unless it's a master. Mirrors party.sh:party_set_cleanup_hook.
+// On session close: deregister from parent (via party-lib.sh locked helper),
+// remove runtime dir, then delete manifest unless it's a master.
+// Mirrors party.sh:party_set_cleanup_hook which sources party-lib.sh for
+// lock-safe worker deregistration.
 func (s *Service) setCleanupHook(ctx context.Context, sessionID string) error {
 	stateRoot := s.Store.Root()
-	// The hook must:
-	// 1. Deregister from parent master (if this is a worker)
-	// 2. Remove runtime directory
-	// 3. Delete manifest unless session_type is master
-	//
-	// We use jq for the JSON field check to handle indented output from json.MarshalIndent.
-	// The parent deregistration reads parent_session from the manifest and removes this
-	// session from the parent's workers list (mirrors party-lib.sh behavior).
+	// Reuse the existing shell helper for parent deregistration to preserve the
+	// coexistence-safe locking protocol (party-lib.sh uses mkdir-based locks).
+	// The hook sources party-lib.sh and calls party_state_remove_worker under lock.
 	hookCmd := fmt.Sprintf(
-		`run-shell "p=$(jq -r '.parent_session // empty' %s/%s.json 2>/dev/null); [ -n \"$p\" ] && jq --arg w %s '.workers = (.workers // [] | map(select(. != $w)))' %s/\"$p\".json > %s/\"$p\".json.tmp 2>/dev/null && mv %s/\"$p\".json.tmp %s/\"$p\".json 2>/dev/null; rm -rf /tmp/%s; t=$(jq -r '.session_type // empty' %s/%s.json 2>/dev/null); [ \"$t\" != master ] && rm -f %s/%s.json; true"`,
-		stateRoot, sessionID,
+		`run-shell "source %s/session/party-lib.sh 2>/dev/null && { p=$(party_state_get_field %s parent_session 2>/dev/null); [ -n \"$p\" ] && party_state_remove_worker \"$p\" %s 2>/dev/null; }; rm -rf /tmp/%s; t=$(jq -r '.session_type // empty' %s/%s.json 2>/dev/null); [ \"$t\" != master ] && rm -f %s/%s.json; true"`,
+		config.ShellQuote(s.RepoRoot),
 		sessionID,
-		stateRoot, stateRoot, stateRoot, stateRoot,
+		sessionID,
 		sessionID,
 		stateRoot, sessionID,
 		stateRoot, sessionID,

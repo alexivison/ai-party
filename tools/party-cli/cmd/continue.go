@@ -24,7 +24,7 @@ func newContinueCmd(store *state.Store, client *tmux.Client, repoRoot string) *c
 
 			w := cmd.OutOrStdout()
 			if result.Reattach {
-				fmt.Fprintf(w, "Session '%s' is already running. Re-attaching.\n", result.SessionID)
+				fmt.Fprintf(w, "Session '%s' is already running.\n", result.SessionID)
 			} else if result.Master {
 				fmt.Fprintf(w, "Master session '%s' resumed.\n", result.SessionID)
 			} else {

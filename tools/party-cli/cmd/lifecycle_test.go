@@ -74,7 +74,7 @@ func TestContinueCmd_AlreadyRunning(t *testing.T) {
 
 	out := runCmd(t, store, hasSessionRunner("party-alive"), "continue", "party-alive")
 	if !strings.Contains(out, "already running") {
-		t.Fatalf("expected 'already running', got: %s", out)
+		t.Fatalf("expected 'already running' message, got: %s", out)
 	}
 }
 
