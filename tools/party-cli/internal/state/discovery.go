@@ -35,6 +35,7 @@ func (s *Store) DiscoverSessions() ([]Manifest, error) {
 		if err != nil {
 			continue // skip corrupt manifests
 		}
+		m.PartyID = partyID // filename is canonical, not JSON content
 		sessions = append(sessions, m)
 	}
 

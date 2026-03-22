@@ -711,3 +711,26 @@ func TestDiscoverSessions_IgnoresLockFiles(t *testing.T) {
 		t.Fatalf("session count: got %d, want 1", len(sessions))
 	}
 }
+
+func TestDiscoverSessions_FilenameIsCanonicalPartyID(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	// Write a manifest where JSON party_id disagrees with filename
+	path := filepath.Join(s.root, "party-right.json")
+	raw := `{"party_id":"party-wrong","cwd":"/tmp"}`
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	sessions, err := s.DiscoverSessions()
+	if err != nil {
+		t.Fatalf("DiscoverSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("session count: got %d, want 1", len(sessions))
+	}
+	if sessions[0].PartyID != "party-right" {
+		t.Errorf("PartyID: got %q, want %q (filename canonical)", sessions[0].PartyID, "party-right")
+	}
+}
