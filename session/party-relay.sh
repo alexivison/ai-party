@@ -40,7 +40,6 @@ relay_discover_master() {
   fi
 }
 
-# Spawn a worker (routes through party.sh for attach handling).
 # --- Main ---
 
 if [[ $# -eq 0 ]]; then
