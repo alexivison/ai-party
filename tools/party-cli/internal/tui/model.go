@@ -64,6 +64,10 @@ type evidenceMsg struct{ entries []EvidenceEntry }
 // peekResultMsg carries the outcome of a peek popup attempt.
 type peekResultMsg struct{ err error }
 
+// TrackerFactory creates a TrackerModel for a given master session.
+// Nil when tracker dependencies are unavailable (e.g., test stubs).
+type TrackerFactory func(masterID string) TrackerModel
+
 // Model is the shared Bubble Tea model for the party-cli TUI.
 type Model struct {
 	SessionID       string
@@ -79,6 +83,8 @@ type Model struct {
 
 	resolver       SessionResolver
 	checkCodexPane func(sessionID string) bool // nil = use default tmux check
+	trackerFactory TrackerFactory
+	tracker        *TrackerModel
 }
 
 // NewModel creates a Model with auto-discovery from environment, state, and tmux.
@@ -104,6 +110,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
+		if m.tracker != nil {
+			m.tracker.width = msg.Width
+			m.tracker.height = msg.Height
+			m.tracker.input.Width = max(10, msg.Width-8)
+		}
 		return m, nil
 
 	case sessionMsg:
@@ -112,6 +123,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SessionTitle = msg.title
 		m.SessionCwd = msg.cwd
 		m.Err = msg.err
+		if msg.mode == ViewMaster && m.tracker == nil && m.trackerFactory != nil {
+			t := m.trackerFactory(msg.id)
+			m.tracker = &t
+		}
+		if m.tracker != nil {
+			m.tracker.width = m.Width
+			m.tracker.height = m.Height
+			m.tracker.refreshWorkers()
+		}
 		return m, tea.Batch(m.refreshCodexStatus(), m.refreshEvidence())
 
 	case codexStatusMsg:
@@ -131,6 +151,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg, refreshMsg:
+		if m.tracker != nil {
+			m.tracker.refreshWorkers()
+		}
 		cmds := []tea.Cmd{m.resolveSession(), m.refreshCodexStatus(), m.refreshEvidence()}
 		if _, ok := msg.(tickMsg); ok {
 			cmds = append(cmds, tickCmd())
@@ -138,6 +161,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
+		// Delegate to tracker in master mode
+		if m.Mode == ViewMaster && m.tracker != nil {
+			t, cmd := m.tracker.Update(msg)
+			m.tracker = &t
+			return m, cmd
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -157,11 +186,16 @@ func (m Model) View() string {
 		return m.viewError()
 	}
 
+	// Master mode with tracker: delegate entirely
+	if m.Mode == ViewMaster && m.tracker != nil {
+		return m.tracker.View()
+	}
+
+	// Worker mode or fallback (no tracker factory)
 	var b strings.Builder
 	inner := m.innerWidth()
 	compact := m.Width > 0 && m.Width < compactThreshold
 
-	// Header
 	switch m.Mode {
 	case ViewMaster:
 		if compact {

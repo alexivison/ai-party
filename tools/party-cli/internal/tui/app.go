@@ -7,6 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/anthropics/ai-config/tools/party-cli/internal/message"
+	"github.com/anthropics/ai-config/tools/party-cli/internal/session"
 	"github.com/anthropics/ai-config/tools/party-cli/internal/state"
 	"github.com/anthropics/ai-config/tools/party-cli/internal/tmux"
 )
@@ -33,7 +35,7 @@ func Launch(opts ...Option) error {
 
 	var m Model
 	if o.sessionOverride != "" {
-		m = NewModelWithResolver(staticResolver(o.sessionOverride))
+		m = newAutoModelWithOverride(o.sessionOverride)
 	} else {
 		m = newAutoModel()
 	}
@@ -66,6 +68,22 @@ func staticResolver(sessionID string) SessionResolver {
 	}
 }
 
+// newAutoModelWithOverride builds a model for an explicit --session override.
+func newAutoModelWithOverride(sessionID string) Model {
+	root := stateRoot()
+	store, err := state.NewStore(root)
+	if err != nil {
+		storeErr := fmt.Errorf("cannot initialize state store at %s: %w", root, err)
+		return NewModelWithResolver(func() (SessionInfo, error) {
+			return SessionInfo{}, storeErr
+		})
+	}
+	client := tmux.NewExecClient()
+	m := NewModelWithResolver(staticResolver(sessionID))
+	m.trackerFactory = buildTrackerFactory(store, client)
+	return m
+}
+
 // newAutoModel builds a model using environment-derived state root.
 // Propagates store init errors as resolver errors so the TUI surfaces them.
 func newAutoModel() Model {
@@ -78,7 +96,21 @@ func newAutoModel() Model {
 		})
 	}
 	client := tmux.NewExecClient()
-	return NewModel(store, client)
+	m := NewModel(store, client)
+	m.trackerFactory = buildTrackerFactory(store, client)
+	return m
+}
+
+// buildTrackerFactory creates a TrackerFactory from shared services.
+func buildTrackerFactory(store *state.Store, client *tmux.Client) TrackerFactory {
+	repoRoot := os.Getenv("PARTY_REPO_ROOT")
+	sessionSvc := session.NewService(store, client, repoRoot)
+	messageSvc := message.NewService(store, client)
+	actions := NewLiveTrackerActions(sessionSvc, messageSvc, client, store)
+	fetcher := NewLiveWorkerFetcher(messageSvc, client)
+	return func(masterID string) TrackerModel {
+		return NewTrackerModel(masterID, fetcher, actions)
+	}
 }
 
 // stateRoot returns the party state directory from env or default.
