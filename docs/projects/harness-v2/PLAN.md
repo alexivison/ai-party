@@ -99,7 +99,7 @@ Task 9 ──> Task 12; Task 10 ──> {Task 13, Task 14}
 | Task 6 | Shared tmux queries, delivery results, capture, popup, and window-management helpers exist for both CLI and TUI surfaces |
 | Task 7 | `party-cli` can render a reusable TUI shell and choose master versus worker mode from live session context |
 | Task 8 | Read-only CLI parity exists for list/status/prune, backed by the shared Go services |
-| Task 9 | Real sessions can launch with `party-cli` in window 1 (pane `0`), default to a sidebar layout, preserve classic fallback, keep Codex alive in a hidden window 0, and visually distinguish agent vs. workspace windows in the tmux status bar |
+| Task 9 | Real sessions can launch with `party-cli` in window 1 (pane `0`), support sidebar layout as opt-in (`PARTY_LAYOUT=sidebar`), preserve classic as default, keep Codex alive in a hidden window 0 when sidebar mode is active, and visually distinguish agent vs. workspace windows in the tmux status bar |
 | Task 10 | Lifecycle commands and worker spawning work through `party-cli`, with shell entrypoints still available as wrappers |
 | Task 11 | Relay, broadcast, read, report, and worker-enumeration flows run through `party-cli` with explicit delivery results |
 | Task 12 | Worker sidebar users see Codex status, evidence summaries, session context, and a guarded peek popup in the unified TUI |
