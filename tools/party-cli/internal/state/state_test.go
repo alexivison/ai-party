@@ -1,0 +1,585 @@
+//go:build linux || darwin
+
+package state
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"sync"
+	"testing"
+	"time"
+)
+
+// ---------------------------------------------------------------------------
+// Manifest JSON serialization
+// ---------------------------------------------------------------------------
+
+func TestManifest_JSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	m := Manifest{
+		PartyID:    "party-abc",
+		CreatedAt:  "2026-03-20T10:00:00Z",
+		UpdatedAt:  "2026-03-20T11:00:00Z",
+		Title:      "test session",
+		Cwd:        "/tmp/work",
+		WindowName: "main",
+		ClaudeBin:  "/usr/local/bin/claude",
+		CodexBin:   "/usr/local/bin/codex",
+		AgentPath:  "/home/user/.claude",
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var got Manifest
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got.PartyID != m.PartyID || got.CreatedAt != m.CreatedAt ||
+		got.UpdatedAt != m.UpdatedAt || got.Title != m.Title ||
+		got.Cwd != m.Cwd || got.WindowName != m.WindowName ||
+		got.ClaudeBin != m.ClaudeBin || got.CodexBin != m.CodexBin ||
+		got.AgentPath != m.AgentPath || got.SessionType != m.SessionType ||
+		!slices.Equal(got.Workers, m.Workers) {
+		t.Fatalf("round-trip mismatch:\n got: %+v\nwant: %+v", got, m)
+	}
+}
+
+func TestManifest_JSONFieldNames(t *testing.T) {
+	t.Parallel()
+
+	m := Manifest{
+		PartyID:     "party-x",
+		SessionType: "master",
+		Workers:     []string{"party-w1", "party-w2"},
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+
+	wantKeys := []string{"party_id", "session_type", "workers"}
+	for _, k := range wantKeys {
+		if _, ok := raw[k]; !ok {
+			t.Errorf("expected JSON key %q, not found in %v", k, raw)
+		}
+	}
+}
+
+func TestManifest_OlderManifestMissingOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	older := `{"party_id":"party-old","created_at":"2026-01-01T00:00:00Z","cwd":"/old"}`
+
+	var m Manifest
+	if err := json.Unmarshal([]byte(older), &m); err != nil {
+		t.Fatalf("unmarshal older manifest: %v", err)
+	}
+
+	if m.PartyID != "party-old" {
+		t.Errorf("party_id: got %q, want %q", m.PartyID, "party-old")
+	}
+	if m.Cwd != "/old" {
+		t.Errorf("cwd: got %q, want %q", m.Cwd, "/old")
+	}
+	if m.SessionType != "" {
+		t.Errorf("session_type: got %q, want empty", m.SessionType)
+	}
+	if m.Workers != nil {
+		t.Errorf("workers: got %v, want nil", m.Workers)
+	}
+	if m.CodexBin != "" {
+		t.Errorf("codex_bin: got %q, want empty", m.CodexBin)
+	}
+}
+
+func TestManifest_ExtraFieldsIgnored(t *testing.T) {
+	t.Parallel()
+
+	future := `{"party_id":"party-f","cwd":"/f","new_field":"surprise"}`
+
+	var m Manifest
+	if err := json.Unmarshal([]byte(future), &m); err != nil {
+		t.Fatalf("unmarshal future manifest: %v", err)
+	}
+
+	if m.PartyID != "party-f" {
+		t.Errorf("party_id: got %q, want %q", m.PartyID, "party-f")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Store CRUD
+// ---------------------------------------------------------------------------
+
+func newTestStore(t *testing.T) *Store {
+	t.Helper()
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	return s
+}
+
+func TestStore_CreateAndRead(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{
+		PartyID:   "party-test",
+		CreatedAt: "2026-03-20T10:00:00Z",
+		UpdatedAt: "2026-03-20T10:00:00Z",
+		Title:     "test",
+		Cwd:       "/tmp",
+	}
+
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Read("party-test")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+
+	if got.PartyID != "party-test" {
+		t.Errorf("PartyID: got %q, want %q", got.PartyID, "party-test")
+	}
+	if got.Title != "test" {
+		t.Errorf("Title: got %q, want %q", got.Title, "test")
+	}
+}
+
+func TestStore_CreateDuplicate(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-dup", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+
+	err := s.Create(m)
+	if err == nil {
+		t.Fatal("expected error on duplicate Create, got nil")
+	}
+}
+
+func TestStore_ReadNotFound(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	_, err := s.Read("party-nonexistent")
+	if err == nil {
+		t.Fatal("expected error on Read of nonexistent manifest, got nil")
+	}
+}
+
+func TestStore_Update(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{
+		PartyID: "party-upd",
+		Title:   "original",
+		Cwd:     "/tmp",
+	}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.Update("party-upd", func(m *Manifest) {
+		m.Title = "updated"
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := s.Read("party-upd")
+	if err != nil {
+		t.Fatalf("Read after update: %v", err)
+	}
+	if got.Title != "updated" {
+		t.Errorf("Title: got %q, want %q", got.Title, "updated")
+	}
+}
+
+func TestStore_UpdateNotFound(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	err := s.Update("party-ghost", func(m *Manifest) {
+		m.Title = "nope"
+	})
+	if err == nil {
+		t.Fatal("expected error on Update of nonexistent manifest, got nil")
+	}
+}
+
+func TestStore_UpdateViaField(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-sf", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.Update("party-sf", func(m *Manifest) {
+		m.SessionType = "master"
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := s.Read("party-sf")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got.SessionType != "master" {
+		t.Errorf("SessionType: got %q, want %q", got.SessionType, "master")
+	}
+}
+
+func TestStore_Delete(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-del", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.Delete("party-del"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	_, err := s.Read("party-del")
+	if err == nil {
+		t.Fatal("expected error after Delete, got nil")
+	}
+}
+
+func TestStore_DeleteNotFound(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	err := s.Delete("party-nope")
+	if err == nil {
+		t.Fatal("expected error on Delete of nonexistent manifest, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ID validation
+// ---------------------------------------------------------------------------
+
+func TestStore_RejectsPathTraversal(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	badIDs := []string{
+		"../../../etc/passwd",
+		"party-../../evil",
+		"party-ok/../../bad",
+		"notparty-abc",
+		"party-",
+		"",
+	}
+	for _, id := range badIDs {
+		if err := s.Create(Manifest{PartyID: id, Cwd: "/tmp"}); err == nil {
+			t.Errorf("Create(%q) should have been rejected", id)
+		}
+		if _, err := s.Read(id); err == nil {
+			t.Errorf("Read(%q) should have been rejected", id)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Worker management
+// ---------------------------------------------------------------------------
+
+func TestStore_AddAndGetWorkers(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-master", SessionType: "master", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.AddWorker("party-master", "party-w1"); err != nil {
+		t.Fatalf("AddWorker w1: %v", err)
+	}
+	if err := s.AddWorker("party-master", "party-w2"); err != nil {
+		t.Fatalf("AddWorker w2: %v", err)
+	}
+
+	workers, err := s.GetWorkers("party-master")
+	if err != nil {
+		t.Fatalf("GetWorkers: %v", err)
+	}
+
+	if len(workers) != 2 {
+		t.Fatalf("workers count: got %d, want 2", len(workers))
+	}
+}
+
+func TestStore_AddWorkerDeduplicates(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-dedup", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.AddWorker("party-dedup", "party-w1"); err != nil {
+		t.Fatalf("AddWorker first: %v", err)
+	}
+	if err := s.AddWorker("party-dedup", "party-w1"); err != nil {
+		t.Fatalf("AddWorker second: %v", err)
+	}
+
+	workers, err := s.GetWorkers("party-dedup")
+	if err != nil {
+		t.Fatalf("GetWorkers: %v", err)
+	}
+	if len(workers) != 1 {
+		t.Fatalf("workers count: got %d, want 1 (deduplicated)", len(workers))
+	}
+}
+
+func TestStore_RemoveWorker(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-rm", Cwd: "/tmp", Workers: []string{"party-w1", "party-w2"}}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.RemoveWorker("party-rm", "party-w1"); err != nil {
+		t.Fatalf("RemoveWorker: %v", err)
+	}
+
+	workers, err := s.GetWorkers("party-rm")
+	if err != nil {
+		t.Fatalf("GetWorkers: %v", err)
+	}
+	if len(workers) != 1 {
+		t.Fatalf("workers count: got %d, want 1", len(workers))
+	}
+	if workers[0] != "party-w2" {
+		t.Errorf("remaining worker: got %q, want %q", workers[0], "party-w2")
+	}
+}
+
+func TestStore_GetWorkersNil(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-empty", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	workers, err := s.GetWorkers("party-empty")
+	if err != nil {
+		t.Fatalf("GetWorkers: %v", err)
+	}
+	if workers != nil {
+		t.Fatalf("workers: got %v, want nil", workers)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Flock-based locking
+// ---------------------------------------------------------------------------
+
+func TestStore_ConcurrentUpdates(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-conc", Cwd: "/tmp", Title: "start"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	const n = 20
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		go func(i int) {
+			defer wg.Done()
+			wid := "party-cw" + string(rune('A'+i))
+			if err := s.AddWorker("party-conc", wid); err != nil {
+				t.Errorf("AddWorker(%d): %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	workers, err := s.GetWorkers("party-conc")
+	if err != nil {
+		t.Fatalf("GetWorkers: %v", err)
+	}
+	if len(workers) != n {
+		t.Errorf("workers count: got %d, want %d", len(workers), n)
+	}
+}
+
+func TestStore_LockTimeout(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	m := Manifest{PartyID: "party-lock", Cwd: "/tmp"}
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Acquire the lock externally and hold it
+	lockPath := filepath.Join(s.root, "party-lock.json.lock")
+	lockFile, err := os.Create(lockPath)
+	if err != nil {
+		t.Fatalf("create lock file: %v", err)
+	}
+	if err := acquireFlock(lockFile, 5*time.Second); err != nil {
+		lockFile.Close()
+		t.Fatalf("acquire external lock: %v", err)
+	}
+
+	// Use a store with short timeout to trigger lock contention
+	shortStore := &Store{root: s.root, lockTimeout: 100 * time.Millisecond}
+
+	err = shortStore.Update("party-lock", func(m *Manifest) {
+		m.Title = "blocked"
+	})
+
+	releaseFlock(lockFile)
+	lockFile.Close()
+
+	if err == nil {
+		t.Fatal("expected lock timeout error, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Discovery
+// ---------------------------------------------------------------------------
+
+func TestDiscoverSessions_AllPartySessions(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	for _, id := range []string{"party-a", "party-b", "party-c"} {
+		if err := s.Create(Manifest{PartyID: id, Cwd: "/tmp"}); err != nil {
+			t.Fatalf("Create(%s): %v", id, err)
+		}
+	}
+
+	sessions, err := s.DiscoverSessions()
+	if err != nil {
+		t.Fatalf("DiscoverSessions: %v", err)
+	}
+
+	if len(sessions) != 3 {
+		t.Fatalf("session count: got %d, want 3", len(sessions))
+	}
+}
+
+func TestDiscoverSessions_IgnoresNonPartyFiles(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	if err := s.Create(Manifest{PartyID: "party-ok", Cwd: "/tmp"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	nonParty := filepath.Join(s.root, "other-thing.json")
+	if err := os.WriteFile(nonParty, []byte(`{"id":"other"}`), 0o644); err != nil {
+		t.Fatalf("write non-party file: %v", err)
+	}
+
+	sessions, err := s.DiscoverSessions()
+	if err != nil {
+		t.Fatalf("DiscoverSessions: %v", err)
+	}
+
+	if len(sessions) != 1 {
+		t.Fatalf("session count: got %d, want 1", len(sessions))
+	}
+	if sessions[0].PartyID != "party-ok" {
+		t.Errorf("PartyID: got %q, want %q", sessions[0].PartyID, "party-ok")
+	}
+}
+
+func TestDiscoverSessions_EmptyDir(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	sessions, err := s.DiscoverSessions()
+	if err != nil {
+		t.Fatalf("DiscoverSessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("session count: got %d, want 0", len(sessions))
+	}
+}
+
+func TestDiscoverSessions_ToleratesCorruptManifest(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	if err := s.Create(Manifest{PartyID: "party-good", Cwd: "/tmp"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	corrupt := filepath.Join(s.root, "party-bad.json")
+	if err := os.WriteFile(corrupt, []byte(`{invalid json`), 0o644); err != nil {
+		t.Fatalf("write corrupt file: %v", err)
+	}
+
+	sessions, err := s.DiscoverSessions()
+	if err != nil {
+		t.Fatalf("DiscoverSessions: %v", err)
+	}
+
+	if len(sessions) != 1 {
+		t.Fatalf("session count: got %d, want 1", len(sessions))
+	}
+}
+
+func TestDiscoverSessions_IgnoresLockFiles(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	if err := s.Create(Manifest{PartyID: "party-lk", Cwd: "/tmp"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	lockFile := filepath.Join(s.root, "party-lk.json.lock")
+	if err := os.WriteFile(lockFile, nil, 0o644); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+
+	sessions, err := s.DiscoverSessions()
+	if err != nil {
+		t.Fatalf("DiscoverSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("session count: got %d, want 1", len(sessions))
+	}
+}
