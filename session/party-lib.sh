@@ -170,12 +170,13 @@ tmux_send() {
     sleep 0.1
     tmux send-keys -t "$target" Enter
 
-    # Verify: check pane buffer for the message
+    # Verify: check pane buffer for the message using grep -F
+    # (not glob match — text contains [CODEX]/[CLAUDE] brackets)
     sleep 0.2
     local verify_text="${text:0:40}"
     local buffer
     buffer=$(tmux capture-pane -t "$target" -p -S -50 2>/dev/null || true)
-    if [[ -n "$buffer" ]] && [[ "$buffer" == *"$verify_text"* ]]; then
+    if [[ -n "$buffer" ]] && printf '%s' "$buffer" | grep -qF "$verify_text"; then
       return 0
     fi
     return 1

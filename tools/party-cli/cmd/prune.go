@@ -132,7 +132,7 @@ func runPruneArtifacts(w io.Writer, maxDays int, dryRun bool) error {
 
 	// 2. Codex shell snapshots (older than 60 days)
 	snapshotDays := 60
-	pruned, err = pruneOldEntries(filepath.Join(home, "codex", "shell_snapshots"), snapshotDays, false, dryRun, w)
+	pruned, err = pruneOldEntries(filepath.Join(home, ".codex", "shell_snapshots"), snapshotDays, false, dryRun, w)
 	if err != nil {
 		fmt.Fprintf(w, "Warning: shell_snapshots prune: %v\n", err)
 	}
