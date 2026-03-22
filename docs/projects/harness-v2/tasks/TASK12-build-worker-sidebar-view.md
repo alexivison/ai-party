@@ -11,11 +11,19 @@ Finish the worker and standalone sidebar experience inside `party-cli`: Codex st
 ## Scope Boundary (REQUIRED)
 
 **In scope:**
-- Implement the final worker/standalone sidebar rendering
-- Read `codex-status.json` written by BOTH transport legs: `tmux-codex.sh` (dispatch/in-progress state) and `tmux-claude.sh` (completion/idle state, last verdict, elapsed time)
+- Define the `codex-status.json` schema and file-location contract (see sub-scope below)
+- Implement write calls in `tmux-codex.sh` (dispatch/in-progress) and `tmux-claude.sh` (completion/idle)
+- Implement the final worker/standalone sidebar rendering that reads `codex-status.json`
 - Summarize recent evidence state and session metadata
 - Add guarded Codex peek popup behavior
 - Handle offline or stale companion states without crashing or lying
+
+**`codex-status.json` sub-scope (blocking — must land before sidebar read side):**
+- **Schema definition:** `{ "state": "idle"|"working"|"error", "target": "<file-or-description>", "mode": "review"|"plan-review"|"prompt"|null, "verdict": "APPROVE"|"REQUEST_CHANGES"|"NEEDS_DISCUSSION"|null, "started_at": "<ISO-8601>", "finished_at": "<ISO-8601>"|null, "error": "<message>"|null }`
+- **File location:** `party_runtime_dir($session)/codex-status.json` (i.e., `/tmp/<session>/codex-status.json` — consistent with the existing transient-state model in `party-lib.sh:14-17`)
+- **Write side — `tmux-codex.sh`:** On dispatch, write `{state: "working", target, mode, started_at}`. On transport error, write `{state: "error", error}`.
+- **Write side — `tmux-claude.sh`:** On completion callback, write `{state: "idle", verdict, finished_at}`. On timeout/error, write `{state: "error", error, finished_at}`.
+- **Atomicity:** Write to a `.tmp` file and `mv` to final path to prevent partial reads by the Go sidebar.
 
 **Out of scope (handled by other tasks):**
 - Master tracker interactions
@@ -78,8 +86,11 @@ Files to study before implementing:
 ## Tests
 
 Test cases:
-- Status-file parse and render
-- Missing or stale status file renders offline state
+- **Write side — `tmux-codex.sh`:** dispatch writes well-formed `codex-status.json` with `state=working`, correct `target`/`mode`/`started_at`; transport error writes `state=error`
+- **Write side — `tmux-claude.sh`:** completion writes `state=idle` with `verdict`/`finished_at`; timeout writes `state=error`
+- **Write side — atomicity:** concurrent reads never see partial JSON (verify `.tmp` + `mv` pattern)
+- **Read side — parse and render:** sidebar correctly renders each state (`working`, `idle`, `error`)
+- **Read side — missing or stale status file:** renders offline state without crash
 - Evidence summary render for recent approval/dispute states
 - Peek popup command construction and unavailable-Codex guard behavior
 

@@ -69,6 +69,24 @@ Files to study before implementing:
 - This task should stop at the foundation. Placeholder or skeletal panels are acceptable; final widgets belong to later tasks
 - Keep the TUI state model thin enough that CLI commands do not need to import UI concerns
 
+## Tracker Migration Checklist
+
+What carries over from `tools/party-tracker/` vs. what gets rebuilt:
+
+| Pattern | Source | Action |
+|---------|--------|--------|
+| **Bubble Tea model/update/view cycle** | `main.go:45-57` (model struct), `:77-110` (Init/Update), `:252-359` (View) | **Reuse pattern** — same `model` → `Init` → `Update` → `View` architecture, but generalize for mode selection (tracker vs sidebar) |
+| **Lip Gloss styles and ANSI palette** | `main.go:14-30` (color vars + style defs) | **Reuse directly** — copy palette constants and style vars into `internal/tui/style.go`; terminal-theme-inheriting ANSI colors are portable |
+| **Width-adaptive rendering** | `main.go:244-250` (`innerWidth`), `:259` (`compact := width < 50`), `:287-299` (compact status variants), `:321-331` (snippet skip at `width < 30`) | **Reuse logic** — extract `innerWidth()` and `compact` threshold into shared helpers; later views reuse them |
+| **Tick/polling mechanism** | `main.go:42-43` (msg types), `:71-75` (`tickCmd` at 3s), `:89-97` (tick handler refreshes workers) | **Reuse pattern** — same `tea.Tick` cadence; generalize the tick handler to refresh whichever view is active |
+| **Key binding patterns** | `main.go:112-198` (normal mode nav: j/k/enter/q), `:200-229` (input mode: esc/enter), `:361-386` (manifest scroll) | **Reuse pattern** — extract shared nav keys (j/k/q/esc) into a base keymap; mode-specific bindings added by tracker/sidebar views |
+| **Text input for relay/broadcast/spawn** | `main.go:34-40` (mode enum), `:200-229` (`updateInput`), `:340-351` (footer prompt) | **Rebuild in Task 13** — master tracker actions are out of scope for Task 7; the input infrastructure can wait |
+| **Worker data loading** | `workers.go:13-18` (Worker struct), `:21-24` (manifest struct), `:26-36` (stateRoot/manifestPath), `:66-103` (fetchWorkers) | **Rebuild in Go** — the Worker struct and manifest reader move to `internal/state/` (Task 5); Task 7 consumes them via service interface, not direct file I/O |
+| **Pane capture / snippet extraction** | `workers.go:106-153` (`captureSnippet` — tmux pane scraping) | **Rebuild in Go** — move to `internal/tmux/` (Task 6); Task 7 calls it through the tmux service |
+| **Action wiring (attach/relay/spawn/stop/delete)** | `actions.go:23-70` (shell-out to `party.sh` / `party-relay.sh`) | **Rebuild in Task 13** — actions are out of scope for Task 7; lifecycle commands land in Task 10 |
+| **Session script resolution** | `actions.go:12-20` (`sessionScript` via `PARTY_REPO_ROOT`) | **Rebuild in Task 6** — tmux service owns script/path resolution |
+| **Manifest viewer (scroll overlay)** | `main.go:361-417` (`updateManifest`/`viewManifest`) | **Defer** — nice-to-have for master tracker (Task 13); not needed in foundation |
+
 ## Tests
 
 Test cases:

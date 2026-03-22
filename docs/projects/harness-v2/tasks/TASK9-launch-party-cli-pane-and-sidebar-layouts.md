@@ -6,7 +6,7 @@
 
 ## Goal
 
-Put the unified binary into live sessions. Pane `0` should now run `party-cli`, master sessions should show the tracker shell, worker and standalone sessions should default to the sidebar shell, Codex should move to a hidden deterministic companion session, and `PARTY_LAYOUT=classic` must still preserve the old visible-Codex layout.
+Put the unified binary into live sessions. Pane `0` should now run `party-cli`, master sessions should show the tracker shell, worker and standalone sessions should support the sidebar shell as an opt-in layout (`PARTY_LAYOUT=sidebar`), Codex should move to a hidden deterministic companion session when sidebar mode is active, and `PARTY_LAYOUT=classic` must remain the default until Task 10 proves sidebar-mode promotion works.
 
 ## Scope Boundary (REQUIRED)
 
@@ -17,7 +17,9 @@ Put the unified binary into live sessions. Pane `0` should now run `party-cli`, 
 - Create and clean up deterministic hidden Codex companion sessions for sidebar mode
 - Preserve `PARTY_LAYOUT=classic` as a first-class escape hatch
 - Update shell routing helpers so retained Codex transport resolves the companion session when sidebar mode is active
-- Update `tmux-claude.sh` return-path routing so Codex-to-Claude delivery canonicalizes the parent session from a companion context
+- Add a shared `party_canonical_session()` helper in `party-lib.sh` that strips the `-codex` suffix from companion session names, so all state-path calculations, manifest writes, and pane lookups resolve to the parent session
+- Update `tmux-claude.sh` return-path routing to use `party_canonical_session()` so Codex-to-Claude delivery, `codex_thread_id` writes, and `party_state_set_field` calls target the parent session — not the companion
+- Update `tmux-codex.sh` to use `party_canonical_session()` when resolving state paths from a companion context
 - Update bash discovery paths (`party.sh --switch`, `party.sh --list`, `party-picker.sh`) to exclude `*-codex` companion sessions, since Go replacements (Task 15) are not yet live
 
 **Out of scope (handled by other tasks):**
@@ -82,17 +84,18 @@ Files to study before implementing:
 - Do not add a new persisted manifest field merely to track the companion; deterministic naming is sufficient
 - Promotion and teardown paths must not orphan companion sessions
 - Crash or force-kill of the parent session may skip the session-closed hook; prune (Task 8) serves as the orphan sweep for this case
-- **Promotion compatibility (blocking):** The current shell promotion path (`session/party-master.sh:126-133`) resolves a visible `codex` role pane and respawns the tracker into it. Once sidebar mode removes the visible Codex pane, promotion breaks. This task MUST update the promotion path to handle sidebar mode: replace the sidebar pane with the tracker and tear down the companion, or defer the sidebar layout change to after Task 10 ports promotion. No independently shippable PR may leave promotion broken.
+- **Promotion compatibility (deferred to Task 10):** The current shell promotion path (`session/party-master.sh:126-133`) resolves a visible `codex` role pane. Once sidebar mode removes it, promotion would break. Task 9 does NOT fix promotion — it defers to Task 10, which owns all lifecycle commands including `promote`. Task 9 MUST NOT break the classic promotion path: sidebar mode is additive, `PARTY_LAYOUT=classic` remains the default until Task 10 proves promotion works in sidebar mode. No independently shippable PR may leave classic promotion broken.
 
 ## Tests
 
 Test cases:
-- Sidebar default launch for standalone and worker sessions
-- Classic fallback launch
+- Sidebar opt-in launch for standalone and worker sessions (`PARTY_LAYOUT=sidebar`)
+- Classic default launch (no env var or `PARTY_LAYOUT=classic`)
 - Master launch remains tracker-based
 - Companion cleanup on stop/delete/session close
 - Codex transport routing resolves the companion when sidebar mode is active
-- Codex→Claude return path (`tmux-claude.sh`) resolves the parent session from companion context
+- `party_canonical_session()` strips `-codex` suffix correctly; returns input unchanged for non-companion sessions
+- Codex→Claude return path (`tmux-claude.sh`) resolves the parent session via `party_canonical_session()` — state writes (`codex_thread_id`, `party_state_set_field`) target the parent, not the companion
 - Bash discovery paths (`--switch`, `--list`, picker) exclude `*-codex` companions
 - Orphan prevention: companion is killed even on unclean parent session death
 
@@ -104,5 +107,5 @@ Test cases:
 - [ ] `tmux-codex.sh` still reaches Codex through retained shell routing
 - [ ] `tmux-claude.sh` return path works from companion session context
 - [ ] Bash switch/list/picker exclude companion sessions
-- [ ] Shell promotion (`party.sh --promote`) works in both sidebar and classic modes
+- [ ] Shell promotion (`party.sh --promote`) continues to work in classic mode (sidebar promotion deferred to Task 10)
 - [ ] Layout and routing tests pass

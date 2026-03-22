@@ -36,7 +36,7 @@ The former standalone sidebar evaluation phase is removed. `docs/projects/sideba
 - [ ] [Task 6](./tasks/TASK6-port-tmux-service-and-pane-capture.md) — Port tmux session queries, role resolution, delivery-confirmed sends, pane capture, popup helpers, and companion-session helpers into shared Go packages (deps: Task 4, Task 5)
 - [ ] [Task 7](./tasks/TASK7-absorb-tracker-runtime-into-tui-foundation.md) — Reuse `party-tracker` Bubble Tea structure, Lip Gloss palette, and narrow-width behavior inside `party-cli`, with auto-selection between worker sidebar mode and master tracker mode (deps: Task 5, Task 6)
 - [ ] [Task 8](./tasks/TASK8-port-read-only-cli-commands.md) — Port `list`, `status`, and `prune` as safe read-only CLI commands backed by the shared state and tmux services (deps: Task 5, Task 6)
-- [ ] [Task 9](./tasks/TASK9-launch-party-cli-pane-and-sidebar-layouts.md) — Launch `party-cli` in pane `0`, keep master tracker layout, add the default sidebar layout for standard and worker sessions, preserve `PARTY_LAYOUT=classic`, and move Codex to a deterministic hidden companion session without porting Codex transport (deps: Task 6, Task 7, Task 8)
+- [ ] [Task 9](./tasks/TASK9-launch-party-cli-pane-and-sidebar-layouts.md) — Launch `party-cli` in pane `0`, keep master tracker layout, add sidebar layout as opt-in for standard and worker sessions (`PARTY_LAYOUT=classic` stays default), move Codex to a deterministic hidden companion session, and canonicalize parent-session resolution for companion contexts without porting Codex transport (deps: Task 6, Task 7, Task 8)
 
 ### Phase 3: Feature Parity + TUI Views
 
@@ -65,7 +65,9 @@ The former standalone sidebar evaluation phase is removed. `docs/projects/sideba
 | `party-cli picker` | Task 14 | interactive attach/resume/delete flows and preview rendering | Task 14, Task 15 | replaces `session/party-picker.sh:21-181` and `session/party-preview.sh:21-64` |
 | Thin-wrapper cutover with `party-lib.sh` retained | Task 15 | shell entrypoints, docs, tests, tmux-codex dependency boundary | Task 15 | shell argv/env -> `party-cli` subcommands, except retained `party-lib.sh` routing helpers |
 
-**Validation:** The revised plan keeps persisted schema change to a minimum. The only new durable contract is the default `sidebar|classic` layout behavior plus the deterministic hidden Codex companion naming rule; `party-lib.sh` remains the library seam for `tmux-codex.sh`, so the plan no longer pretends Bash disappears entirely.
+**Validation:** The revised plan keeps persisted schema change to a minimum. The only new durable contract is the `sidebar|classic` layout behavior (classic default, sidebar opt-in until Task 10 proves promotion parity) plus the deterministic hidden Codex companion naming rule; `party-lib.sh` remains the library seam for `tmux-codex.sh`, so the plan no longer pretends Bash disappears entirely.
+
+**Open concern — manifest locking coexistence (Task 5):** Task 5 introduces flock-based locking in Go, but Bash writers (`party-lib.sh:44-63`, `party.sh:82-83`, `tmux-claude.sh:12-17`) still use the mkdir lock protocol. During the migration window both sides would mutate manifests under different locks. Task 5 must either keep the mkdir protocol in Go until Bash writers are retired, or convert both Bash and Go to a shared lock-file scheme in the same task.
 
 ## Dependency Graph
 
