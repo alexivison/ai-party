@@ -21,8 +21,41 @@ CLAUDE_PANE=$(party_role_pane_target_with_fallback "$SESSION_NAME" "claude") || 
   exit 1
 }
 
+# Detect completion messages by prefix-anchored patterns matching actual call sites.
+# Mid-task traffic (questions, status) does not match and leaves status unchanged.
+_is_completion=false
+case "$MESSAGE" in
+  "Review complete. Findings at: "*)       _is_completion=true ;;
+  "Plan review complete. Findings at: "*)  _is_completion=true ;;
+  "Task complete. Response at: "*)         _is_completion=true ;;
+esac
+
 if tmux_send "$CLAUDE_PANE" "[CODEX] $MESSAGE" "tmux-claude.sh"; then
+  if $_is_completion; then
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
+    _verdict=""
+    _findings_file=""
+    if [[ "$MESSAGE" =~ Findings\ at:\ ([^[:space:]]+) ]]; then
+      _findings_file="${BASH_REMATCH[1]}"
+    elif [[ "$MESSAGE" =~ Response\ at:\ ([^[:space:]]+) ]]; then
+      _findings_file="${BASH_REMATCH[1]}"
+    fi
+    if [[ -n "$_findings_file" && -f "$_findings_file" ]]; then
+      if grep -q '^VERDICT: APPROVED' "$_findings_file" 2>/dev/null; then
+        _verdict="APPROVE"
+      elif grep -q '^VERDICT: REQUEST_CHANGES' "$_findings_file" 2>/dev/null; then
+        _verdict="REQUEST_CHANGES"
+      elif grep -q '^VERDICT: NEEDS_DISCUSSION' "$_findings_file" 2>/dev/null; then
+        _verdict="NEEDS_DISCUSSION"
+      fi
+    fi
+    write_codex_status "$RUNTIME_DIR" "idle" "" "" "$_verdict"
+  fi
   echo "CLAUDE_MESSAGE_SENT"
 else
+  if $_is_completion; then
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
+    write_codex_status "$RUNTIME_DIR" "error" "" "" "" "completion delivery failed: Claude pane busy"
+  fi
   echo "CLAUDE_MESSAGE_DROPPED"
 fi

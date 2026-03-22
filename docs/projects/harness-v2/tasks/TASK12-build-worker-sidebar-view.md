@@ -96,8 +96,8 @@ Test cases:
 
 ## Acceptance Criteria
 
-- [ ] Worker/standalone sidebar view is fully rendered in `party-cli`
-- [ ] `tmux-codex.sh` writes dispatch/in-progress status to `codex-status.json`
-- [ ] `tmux-claude.sh` writes completion/idle status with last verdict to `codex-status.json`
-- [ ] Offline and unavailable Codex states are handled gracefully
-- [ ] Sidebar tests pass
+- [x] Worker/standalone sidebar view is fully rendered in `party-cli`
+- [x] `tmux-codex.sh` writes dispatch/in-progress status to `codex-status.json`
+- [x] `tmux-claude.sh` writes completion/idle status with last verdict to `codex-status.json`
+- [x] Offline and unavailable Codex states are handled gracefully
+- [x] Sidebar tests pass
