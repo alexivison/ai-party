@@ -90,10 +90,13 @@ case "$MODE" in
       "DISPUTE_SECTION=$DISPUTE_SECTION" \
       "REREVEW_SECTION=$REREVEW_SECTION")
 
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
     if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:review"; then
+      write_codex_status "$RUNTIME_DIR" "working" "$BASE" "review"
       echo "CODEX_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."
     else
+      write_codex_status "$RUNTIME_DIR" "error" "" "" "" "review dispatch failed: pane busy"
       echo "CODEX_REVIEW_DROPPED"
       echo "Codex pane is busy. Message dropped (best-effort delivery)."
     fi
@@ -116,10 +119,13 @@ case "$MODE" in
       "FINDINGS_FILE=$FINDINGS_FILE" \
       "NOTIFY_CMD=$NOTIFY_CMD")
 
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
     if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:plan-review"; then
+      write_codex_status "$RUNTIME_DIR" "working" "$PLAN_PATH" "plan-review"
       echo "CODEX_PLAN_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."
     else
+      write_codex_status "$RUNTIME_DIR" "error" "" "" "" "plan-review dispatch failed: pane busy"
       echo "CODEX_PLAN_REVIEW_DROPPED"
       echo "Codex pane is busy. Message dropped (best-effort delivery)."
     fi
@@ -136,10 +142,13 @@ case "$MODE" in
     NOTIFY_SCRIPT="$(cd "$SCRIPT_DIR/../../../../codex/skills/claude-transport/scripts" && pwd)/tmux-claude.sh"
 
     MSG="[CLAUDE] cd '$WORK_DIR' && $PROMPT_TEXT — Write response to: $RESPONSE_FILE — When done, run: $NOTIFY_SCRIPT \"Task complete. Response at: $RESPONSE_FILE\""
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
     if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:prompt"; then
+      write_codex_status "$RUNTIME_DIR" "working" "$PROMPT_TEXT" "prompt"
       echo "CODEX_TASK_REQUESTED"
       echo "Codex will notify via tmux when complete."
     else
+      write_codex_status "$RUNTIME_DIR" "error" "" "" "" "prompt dispatch failed: pane busy"
       echo "CODEX_TASK_DROPPED"
       echo "Codex pane is busy. Message dropped (best-effort delivery)."
     fi

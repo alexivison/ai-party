@@ -48,20 +48,21 @@ func Launch(opts ...Option) error {
 // staticResolver returns a resolver for an explicit --session override.
 // Errors are propagated so the TUI shows a clear failure state.
 func staticResolver(sessionID string) SessionResolver {
-	return func() (string, ViewMode, error) {
+	return func() (SessionInfo, error) {
 		root := stateRoot()
 		store, err := state.NewStore(root)
 		if err != nil {
-			return "", ViewWorker, fmt.Errorf("cannot initialize state store: %w", err)
+			return SessionInfo{}, fmt.Errorf("cannot initialize state store: %w", err)
 		}
 		manifest, err := store.Read(sessionID)
 		if err != nil {
-			return "", ViewWorker, fmt.Errorf("cannot read manifest for %s: %w", sessionID, err)
+			return SessionInfo{}, fmt.Errorf("cannot read manifest for %s: %w", sessionID, err)
 		}
+		mode := ViewWorker
 		if manifest.SessionType == "master" {
-			return sessionID, ViewMaster, nil
+			mode = ViewMaster
 		}
-		return sessionID, ViewWorker, nil
+		return SessionInfo{ID: sessionID, Mode: mode, Title: manifest.Title, Cwd: manifest.Cwd}, nil
 	}
 }
 
@@ -72,8 +73,8 @@ func newAutoModel() Model {
 	store, err := state.NewStore(root)
 	if err != nil {
 		storeErr := fmt.Errorf("cannot initialize state store at %s: %w", root, err)
-		return NewModelWithResolver(func() (string, ViewMode, error) {
-			return "", ViewWorker, storeErr
+		return NewModelWithResolver(func() (SessionInfo, error) {
+			return SessionInfo{}, storeErr
 		})
 	}
 	client := tmux.NewExecClient()
