@@ -61,6 +61,7 @@ N/A (non-UI task)
 - `party-cli list` shows only visible user-facing sessions
 - `party-cli status` reports manifest and tmux state clearly
 - `party-cli prune` removes stale manifests with explicit output and exit behavior
+- Prune must enumerate `*-codex` tmux sessions and kill any whose parent session no longer exists, serving as the orphan sweep for companion sessions left behind by crashes or force-kills
 - Commands remain safe to run while the Bash harness still owns mutations
 
 **Key gotchas:**
@@ -73,6 +74,7 @@ Test cases:
 - Visible-session listing with and without reserved companion sessions present
 - Status output for active, stale, and missing sessions
 - Prune behavior across active and stale manifest sets
+- Prune cleans up orphaned `*-codex` companion sessions with no living parent
 
 ## Acceptance Criteria
 

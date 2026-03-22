@@ -17,6 +17,8 @@ Put the unified binary into live sessions. Pane `0` should now run `party-cli`, 
 - Create and clean up deterministic hidden Codex companion sessions for sidebar mode
 - Preserve `PARTY_LAYOUT=classic` as a first-class escape hatch
 - Update shell routing helpers so retained Codex transport resolves the companion session when sidebar mode is active
+- Update `tmux-claude.sh` return-path routing so Codex-to-Claude delivery canonicalizes the parent session from a companion context
+- Update bash discovery paths (`party.sh --switch`, `party.sh --list`, `party-picker.sh`) to exclude `*-codex` companion sessions, since Go replacements (Task 15) are not yet live
 
 **Out of scope (handled by other tasks):**
 - Final worker sidebar widgets
@@ -35,6 +37,7 @@ Files to study before implementing:
 - `session/party-master.sh` — current master launch flow
 - `session/party-lib.sh` — role routing and session discovery helpers
 - `claude/skills/codex-transport/scripts/tmux-codex.sh` — retained shell caller that must keep working
+- `codex/skills/claude-transport/scripts/tmux-claude.sh` — Codex→Claude return path that must resolve the parent session from companion context
 
 ## Design References (REQUIRED for UI/component tasks)
 
@@ -58,6 +61,8 @@ Files to study before implementing:
 | `session/party-master.sh` | Modify |
 | `session/party-lib.sh` | Modify |
 | `claude/skills/codex-transport/scripts/tmux-codex.sh` | Modify only if helper names or routing glue change |
+| `codex/skills/claude-transport/scripts/tmux-claude.sh` | Modify — add parent-session canonicalization for companion context |
+| `session/party-picker.sh` | Modify — exclude `*-codex` companion sessions from scan |
 | `tests/test-party-routing.sh` | Modify |
 | `tests/test-party-master.sh` | Modify |
 | `tests/test-party-sidebar-layout.sh` | Create |
@@ -71,10 +76,12 @@ Files to study before implementing:
 - `PARTY_LAYOUT=classic` preserves the existing visible-Codex behavior
 - Companion sessions are cleaned up on teardown and remain hidden from user-facing discovery
 - Retained Codex transport continues to resolve a live target in both sidebar and classic modes
+- The session-closed hook must kill the companion Codex session on teardown via `tmux kill-session -t "${session}-codex" 2>/dev/null`
 
 **Key gotchas:**
 - Do not add a new persisted manifest field merely to track the companion; deterministic naming is sufficient
 - Promotion and teardown paths must not orphan companion sessions
+- Crash or force-kill of the parent session may skip the session-closed hook; prune (Task 8) serves as the orphan sweep for this case
 - **Promotion compatibility (blocking):** The current shell promotion path (`session/party-master.sh:126-133`) resolves a visible `codex` role pane and respawns the tracker into it. Once sidebar mode removes the visible Codex pane, promotion breaks. This task MUST update the promotion path to handle sidebar mode: replace the sidebar pane with the tracker and tear down the companion, or defer the sidebar layout change to after Task 10 ports promotion. No independently shippable PR may leave promotion broken.
 
 ## Tests
@@ -85,6 +92,9 @@ Test cases:
 - Master launch remains tracker-based
 - Companion cleanup on stop/delete/session close
 - Codex transport routing resolves the companion when sidebar mode is active
+- Codex→Claude return path (`tmux-claude.sh`) resolves the parent session from companion context
+- Bash discovery paths (`--switch`, `--list`, picker) exclude `*-codex` companions
+- Orphan prevention: companion is killed even on unclean parent session death
 
 ## Acceptance Criteria
 
@@ -92,5 +102,7 @@ Test cases:
 - [ ] Sidebar and classic layouts both work as designed
 - [ ] Hidden Codex companions are deterministic, hidden, and cleaned up
 - [ ] `tmux-codex.sh` still reaches Codex through retained shell routing
+- [ ] `tmux-claude.sh` return path works from companion session context
+- [ ] Bash switch/list/picker exclude companion sessions
 - [ ] Shell promotion (`party.sh --promote`) works in both sidebar and classic modes
 - [ ] Layout and routing tests pass
