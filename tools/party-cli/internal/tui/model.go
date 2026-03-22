@@ -210,8 +210,8 @@ func newAutoResolver(store *state.Store, tc *tmux.Client) SessionResolver {
 }
 
 // discoverSessionID mirrors session/party-lib.sh:discover_session().
+// Priority: PARTY_SESSION env → scan live tmux sessions for unique party- match.
 func discoverSessionID(tc *tmux.Client) (string, error) {
-	// 1. Explicit override
 	if id := os.Getenv("PARTY_SESSION"); id != "" {
 		return id, nil
 	}
@@ -219,25 +219,6 @@ func discoverSessionID(tc *tmux.Client) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// 2. Inside tmux — ask for the current session name
-	if os.Getenv("TMUX") != "" {
-		sessions, err := tc.ListSessions(ctx)
-		if err == nil {
-			// The current tmux session is the one we're attached to.
-			// tmux display-message is not in the Client API, but we can
-			// check which session starts with "party-" from the env.
-			for _, s := range sessions {
-				if strings.HasPrefix(s, "party-") {
-					// When inside tmux, the harness always sets PARTY_SESSION.
-					// If we reach here, PARTY_SESSION was not set but we found
-					// party sessions. Use single-match disambiguation.
-					return disambiguatePartySessions(sessions)
-				}
-			}
-		}
-	}
-
-	// 3. Not inside tmux — scan for a unique party session
 	sessions, err := tc.ListSessions(ctx)
 	if err != nil {
 		return "", fmt.Errorf("session discovery failed: %w", err)
