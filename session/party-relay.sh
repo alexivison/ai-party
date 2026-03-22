@@ -41,24 +41,6 @@ relay_discover_master() {
 }
 
 # Spawn a worker (routes through party.sh for attach handling).
-relay_spawn() {
-  local spawn_args=("$SESSION_NAME")
-  local prompt=""
-  local title=""
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --prompt) prompt="${2:?--prompt requires a message}"; shift 2 ;;
-      *) title="$1"; shift ;;
-    esac
-  done
-
-  [[ -n "$title" ]] && spawn_args+=("$title")
-  [[ -n "$prompt" ]] && spawn_args+=(--prompt "$prompt")
-
-  "${PARTY_CLI_CMD[@]}" spawn "${spawn_args[@]}"
-}
-
 # --- Main ---
 
 if [[ $# -eq 0 ]]; then
@@ -99,7 +81,14 @@ case "$1" in
   --spawn)
     relay_discover_master
     shift
-    relay_spawn "$@"
+    _spawn_args=("$SESSION_NAME")
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --prompt) _spawn_args+=(--prompt "${2:?--prompt requires a message}"); shift 2 ;;
+        *) _spawn_args+=("$1"); shift ;;
+      esac
+    done
+    exec "${PARTY_CLI_CMD[@]}" spawn "${_spawn_args[@]}"
     ;;
   --file)
     shift
