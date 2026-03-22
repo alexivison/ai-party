@@ -40,6 +40,22 @@ _require_session() {
   }
 }
 
+# Delivery-confirmed send. Exit 76 (keys sent but buffer check failed)
+# is treated as success — the keys were delivered, capture-pane just
+# couldn't confirm. Retrying would cause duplicate dispatch.
+# Returns 0 on success/unconfirmed, 75 on pane busy (dropped).
+_send_with_retry() {
+  local target="$1" text="$2" caller="$3"
+  local rc=0
+  tmux_send "$target" "$text" "$caller" || rc=$?
+  if [[ $rc -eq 76 ]]; then
+    # Keys were sent, buffer verification failed — treat as delivered
+    echo "tmux_send: delivery unconfirmed for '$caller' (capture-pane miss)" >&2
+    return 0
+  fi
+  return $rc
+}
+
 case "$MODE" in
 
   --review)
@@ -91,7 +107,7 @@ case "$MODE" in
       "REREVEW_SECTION=$REREVEW_SECTION")
 
     RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
-    if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:review"; then
+    if _send_with_retry "$CODEX_PANE" "$MSG" "tmux-codex.sh:review"; then
       write_codex_status "$RUNTIME_DIR" "working" "$BASE" "review"
       echo "CODEX_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."
@@ -120,7 +136,7 @@ case "$MODE" in
       "NOTIFY_CMD=$NOTIFY_CMD")
 
     RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
-    if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:plan-review"; then
+    if _send_with_retry "$CODEX_PANE" "$MSG" "tmux-codex.sh:plan-review"; then
       write_codex_status "$RUNTIME_DIR" "working" "$PLAN_PATH" "plan-review"
       echo "CODEX_PLAN_REVIEW_REQUESTED"
       echo "Claude is NOT blocked. Codex will notify via tmux when complete."
@@ -143,7 +159,7 @@ case "$MODE" in
 
     MSG="[CLAUDE] cd '$WORK_DIR' && $PROMPT_TEXT — Write response to: $RESPONSE_FILE — When done, run: $NOTIFY_SCRIPT \"Task complete. Response at: $RESPONSE_FILE\""
     RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
-    if tmux_send "$CODEX_PANE" "$MSG" "tmux-codex.sh:prompt"; then
+    if _send_with_retry "$CODEX_PANE" "$MSG" "tmux-codex.sh:prompt"; then
       write_codex_status "$RUNTIME_DIR" "working" "$PROMPT_TEXT" "prompt"
       echo "CODEX_TASK_REQUESTED"
       echo "Codex will notify via tmux when complete."
