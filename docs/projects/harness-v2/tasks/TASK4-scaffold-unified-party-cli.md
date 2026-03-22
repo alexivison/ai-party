@@ -83,7 +83,7 @@ Test cases:
 
 ## Acceptance Criteria
 
-- [ ] `tools/party-cli/` exists as a buildable Go module
-- [ ] Root no-arg behavior launches TUI mode
-- [ ] Subcommand mode is wired separately from TUI mode
-- [ ] Shared package seams and test scaffolding are in place
+- [x] `tools/party-cli/` exists as a buildable Go module
+- [x] Root no-arg behavior launches TUI mode
+- [x] Subcommand mode is wired separately from TUI mode
+- [x] Shared package seams and test scaffolding are in place
