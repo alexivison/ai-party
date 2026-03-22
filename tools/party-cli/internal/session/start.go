@@ -267,12 +267,11 @@ func (s *Service) setResumeEnv(ctx context.Context, sessionID, claudeID, codexID
 // remove runtime dir, then delete manifest unless it's a master.
 func (s *Service) setCleanupHook(ctx context.Context, sessionID string) error {
 	qStateRoot := config.ShellQuote(s.Store.Root())
-	// Deregister from parent via jq directly (no dependency on party-lib.sh
-	// manifest CRUD functions — those have been retired in favor of Go).
-	// The race window for unlocked jq write is narrow (session close only)
-	// and consequence is a stale worker entry cleaned by prune.
+	// Deregister from parent via jq, coordinating with Go's flock on the
+	// same .json.lock file used by state.Store. Perl is used as a portable
+	// flock wrapper (macOS ships with Perl; flock CLI does not exist).
 	hookCmd := fmt.Sprintf(
-		`run-shell "SR=%s; p=$(jq -r '.parent_session // empty' $SR/%s.json 2>/dev/null); if [ -n \"$p\" ] && [ -f \"$SR/$p.json\" ]; then tmp=$(mktemp); jq --arg w %s '.workers=((.workers//[])-[$w])' \"$SR/$p.json\" >\"$tmp\" && mv \"$tmp\" \"$SR/$p.json\" || rm -f \"$tmp\"; fi; rm -rf /tmp/%s; t=$(jq -r '.session_type // empty' $SR/%s.json 2>/dev/null); [ \"$t\" != master ] && rm -f $SR/%s.json; true"`,
+		`run-shell "SR=%s; p=$(jq -r '.parent_session // empty' $SR/%s.json 2>/dev/null); if [ -n \"$p\" ] && [ -f \"$SR/$p.json\" ]; then perl -MFcntl=:flock -e 'open my $f,\">\",shift or exit 1;flock($f,LOCK_EX) or exit 1;exec @ARGV[1..$#ARGV]' \"$SR/$p.json.lock\" bash -c 'tmp=$(mktemp);jq --arg w %s '\"'\"'.workers=((.workers//[])-[$w])'\"'\"' \"$SR/$p.json\" >\"$tmp\" && mv \"$tmp\" \"$SR/$p.json\" || rm -f \"$tmp\"'; fi; rm -rf /tmp/%s; t=$(jq -r '.session_type // empty' $SR/%s.json 2>/dev/null); [ \"$t\" != master ] && rm -f $SR/%s.json; true"`,
 		qStateRoot,
 		sessionID,
 		sessionID,
