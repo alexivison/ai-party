@@ -509,7 +509,7 @@ party_role_pane_target_with_fallback() {
 # sidebar: hidden Codex window 0 + workspace window 1 (party-cli | Claude | Shell)
 # classic: single window with Codex | Claude | Shell (original layout)
 party_layout_mode() {
-  local mode="${PARTY_LAYOUT:-classic}"
+  local mode="${PARTY_LAYOUT:-sidebar}"
   case "$mode" in
     sidebar) echo "sidebar" ;;
     *)       echo "classic" ;;
