@@ -45,18 +45,18 @@ func Launch(opts ...Option) error {
 	return nil
 }
 
-// staticResolver returns a resolver that reads the manifest for the given session
-// to determine mode, falling back to worker if the manifest is unreadable.
+// staticResolver returns a resolver for an explicit --session override.
+// Errors are propagated so the TUI shows a clear failure state.
 func staticResolver(sessionID string) SessionResolver {
 	return func() (string, ViewMode, error) {
 		root := stateRoot()
 		store, err := state.NewStore(root)
 		if err != nil {
-			return sessionID, ViewWorker, nil
+			return "", ViewWorker, fmt.Errorf("cannot initialize state store: %w", err)
 		}
 		manifest, err := store.Read(sessionID)
 		if err != nil {
-			return sessionID, ViewWorker, nil
+			return "", ViewWorker, fmt.Errorf("cannot read manifest for %s: %w", sessionID, err)
 		}
 		if manifest.SessionType == "master" {
 			return sessionID, ViewMaster, nil
