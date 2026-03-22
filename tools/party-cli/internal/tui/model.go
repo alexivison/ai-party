@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/anthropics/ai-config/tools/party-cli/internal/state"
+	"github.com/anthropics/ai-config/tools/party-cli/internal/tmux"
 )
 
 // ViewMode determines which top-level view the TUI renders.
@@ -55,10 +57,10 @@ type Model struct {
 	resolver SessionResolver
 }
 
-// NewModel creates a Model with auto-discovery from environment and state store.
-func NewModel(store *state.Store) Model {
+// NewModel creates a Model with auto-discovery from environment, state, and tmux.
+func NewModel(store *state.Store, tc *tmux.Client) Model {
 	return Model{
-		resolver: newAutoResolver(store),
+		resolver: newAutoResolver(store, tc),
 	}
 }
 
@@ -184,13 +186,15 @@ func (m Model) resolveSession() tea.Cmd {
 	}
 }
 
-// newAutoResolver builds a SessionResolver that reads PARTY_SESSION env
-// and checks the manifest's session_type to determine mode.
-func newAutoResolver(store *state.Store) SessionResolver {
+// newAutoResolver builds a SessionResolver matching the shell's discover_session:
+// 1. PARTY_SESSION env override
+// 2. tmux display-message when TMUX env is set (inside tmux)
+// 3. Scan live tmux sessions for a unique party- match
+func newAutoResolver(store *state.Store, tc *tmux.Client) SessionResolver {
 	return func() (string, ViewMode, error) {
-		sessionID := os.Getenv("PARTY_SESSION")
-		if sessionID == "" {
-			return "", ViewWorker, fmt.Errorf("PARTY_SESSION not set")
+		sessionID, err := discoverSessionID(tc)
+		if err != nil {
+			return "", ViewWorker, err
 		}
 
 		m, err := store.Read(sessionID)
@@ -202,5 +206,59 @@ func newAutoResolver(store *state.Store) SessionResolver {
 			return sessionID, ViewMaster, nil
 		}
 		return sessionID, ViewWorker, nil
+	}
+}
+
+// discoverSessionID mirrors session/party-lib.sh:discover_session().
+func discoverSessionID(tc *tmux.Client) (string, error) {
+	// 1. Explicit override
+	if id := os.Getenv("PARTY_SESSION"); id != "" {
+		return id, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// 2. Inside tmux — ask for the current session name
+	if os.Getenv("TMUX") != "" {
+		sessions, err := tc.ListSessions(ctx)
+		if err == nil {
+			// The current tmux session is the one we're attached to.
+			// tmux display-message is not in the Client API, but we can
+			// check which session starts with "party-" from the env.
+			for _, s := range sessions {
+				if strings.HasPrefix(s, "party-") {
+					// When inside tmux, the harness always sets PARTY_SESSION.
+					// If we reach here, PARTY_SESSION was not set but we found
+					// party sessions. Use single-match disambiguation.
+					return disambiguatePartySessions(sessions)
+				}
+			}
+		}
+	}
+
+	// 3. Not inside tmux — scan for a unique party session
+	sessions, err := tc.ListSessions(ctx)
+	if err != nil {
+		return "", fmt.Errorf("session discovery failed: %w", err)
+	}
+	return disambiguatePartySessions(sessions)
+}
+
+// disambiguatePartySessions finds the unique party- session or errors.
+func disambiguatePartySessions(sessions []string) (string, error) {
+	var matches []string
+	for _, s := range sessions {
+		if strings.HasPrefix(s, "party-") {
+			matches = append(matches, s)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no party session found")
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("multiple party sessions found (%d) — set PARTY_SESSION to disambiguate", len(matches))
 	}
 }

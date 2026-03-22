@@ -3,10 +3,12 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/anthropics/ai-config/tools/party-cli/internal/state"
+	"github.com/anthropics/ai-config/tools/party-cli/internal/tmux"
 )
 
 // Option configures the TUI launch.
@@ -73,7 +75,8 @@ func newAutoModel() Model {
 			return "unknown", ViewWorker, nil
 		})
 	}
-	return NewModel(store)
+	client := tmux.NewExecClient()
+	return NewModel(store, client)
 }
 
 // stateRoot returns the party state directory from env or default.
@@ -82,5 +85,5 @@ func stateRoot() string {
 		return root
 	}
 	home, _ := os.UserHomeDir()
-	return home + "/.party-state"
+	return filepath.Join(home, ".party-state")
 }

@@ -229,6 +229,52 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
+func TestDisambiguatePartySessions(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		sessions []string
+		wantID   string
+		wantErr  bool
+	}{
+		"single match": {
+			sessions: []string{"party-abc", "other-session"},
+			wantID:   "party-abc",
+		},
+		"no match": {
+			sessions: []string{"other-session"},
+			wantErr:  true,
+		},
+		"empty": {
+			sessions: nil,
+			wantErr:  true,
+		},
+		"multiple matches": {
+			sessions: []string{"party-abc", "party-def"},
+			wantErr:  true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			id, err := disambiguatePartySessions(tc.sessions)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got id=%q", id)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if id != tc.wantID {
+				t.Errorf("got %q, want %q", id, tc.wantID)
+			}
+		})
+	}
+}
+
 func TestInnerWidth(t *testing.T) {
 	t.Parallel()
 
