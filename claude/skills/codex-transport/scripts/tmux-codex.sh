@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tmux-codex.sh — Claude's direct interface to Codex via tmux
+# tmux-codex.sh — Claude's direct interface to The Wizard via tmux
 set -euo pipefail
 
 MODE="${1:?Usage: tmux-codex.sh --review|--plan-review|--prompt|--review-complete|--needs-discussion}"
@@ -31,7 +31,7 @@ _require_session() {
   discover_session
   # Master sessions have no Codex pane — guard early
   if party_is_master "$SESSION_NAME" 2>/dev/null; then
-    echo "CODEX_NOT_AVAILABLE: Master sessions have no Codex pane. Route review work through a worker session." >&2
+    echo "CODEX_NOT_AVAILABLE: Master sessions have no Wizard pane. Route review work through a worker session." >&2
     exit 1
   fi
   CODEX_PANE=$(party_codex_pane_target "$SESSION_NAME") || {

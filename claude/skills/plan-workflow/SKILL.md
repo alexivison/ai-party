@@ -1,26 +1,26 @@
 ---
 name: plan-workflow
 description: >-
-  Orchestrate plan creation by dispatching Codex (the Wizard) to do deep research
-  and produce a PLAN.md. Claude gathers context, dispatches Codex, presents findings,
+  Orchestrate plan creation by dispatching The Wizard (Codex CLI) to do deep research
+  and produce a PLAN.md. Claude gathers context, dispatches The Wizard, presents findings,
   relays user feedback, and verifies the final plan. Use when the user wants to plan
   a feature, investigate a ticket, design an approach, create a PLAN.md, scope work,
   or says things like "plan this", "how should we approach", "let's think through",
   "create a plan for", or references a Linear ticket they want planned. Also use when
   task-workflow needs a plan that doesn't exist yet. This is NOT a skill for Claude
-  to plan alone — Codex does the deep reasoning; Claude orchestrates.
+  to plan alone — The Wizard does the deep reasoning; Claude orchestrates.
 user-invocable: true
 ---
 
 # Plan Workflow
 
-Orchestrate Codex (the Wizard) to produce a PLAN.md. You are the Paladin — your role
-is context-gathering, dispatch, verification, and relay. Codex does the deep research
+Orchestrate The Wizard (Codex CLI) to produce a PLAN.md. You are the Paladin — your role
+is context-gathering, dispatch, verification, and relay. The Wizard does the deep research
 and plan authoring.
 
 ## Phase 1 — Gather Context
 
-Before dispatching Codex, assemble everything the Wizard needs to reason well.
+Before dispatching The Wizard, assemble everything needed for good reasoning.
 
 1. **Understand the ask** — What does the user want planned? A Linear ticket, a feature
    idea, a bug investigation, an architectural change? Extract the goal and constraints.

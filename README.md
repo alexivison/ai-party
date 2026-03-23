@@ -1,7 +1,7 @@
 # ai-config
 
 <p align="center">
-  <img src="assets/the-adventuring-party.png" alt="The Adventuring Party — Claude the Warforged Paladin, the Mastermind Rogue, and Codex the High Elf Wizard" width="700">
+  <img src="assets/the-adventuring-party.png" alt="The Adventuring Party — Claude the Warforged Paladin, the Mastermind Rogue, and The Wizard (High Elf)" width="700">
 </p>
 
 <p align="center"><em>"Evidence before claims. Tests before implementation."</em></p>
@@ -14,7 +14,7 @@ Shared configuration and orchestration for an adventuring party of AI coding ass
 |--------|-------|------|
 | **The User** | Mastermind Rogue | Commander and final authority. Leads the party. |
 | **Claude** | Warforged Paladin | Living construct of steel and divine fire. Implementation, testing, orchestration. |
-| **Codex** | High Elf Wizard | Ancient arcanist of deep intellect. Deep reasoning, analysis, review. |
+| **The Wizard** | High Elf Wizard | Ancient arcanist of deep intellect. Deep reasoning, analysis, review. |
 
 ## Structure
 
@@ -81,7 +81,7 @@ Removes symlinks but keeps the repository.
 
 ## Usage
 
-Launch a party session to run Claude and Codex side by side in a three-pane tmux layout:
+Launch a party session to run Claude and The Wizard side by side in a three-pane tmux layout:
 
 ```bash
 ./session/party.sh "my task"
@@ -99,7 +99,7 @@ Each party is a standalone tmux session with three panes:
 
 ### Master Session
 
-A master session replaces the Codex pane with an interactive tracker TUI. The master Claude acts as an orchestrator, dispatching work to worker sessions instead of implementing directly.
+A master session replaces the Wizard pane with an interactive tracker TUI. The master Claude acts as an orchestrator, dispatching work to worker sessions instead of implementing directly.
 
 ```bash
 ./session/party.sh --master "Project Alpha"

@@ -1,15 +1,15 @@
 ---
 name: tmux-handler
 description: >-
-  Handle incoming [CODEX] messages from Codex via tmux. Covers review completion,
+  Handle incoming [CODEX] messages from The Wizard via tmux. Covers review completion,
   questions, task results, and plan review findings in TOON format. Triggers whenever
   a [CODEX] prefixed message appears — review complete notifications, questions from
-  Codex, task completion notices, or plan review results. Use this skill to correctly
-  parse, validate, triage, and respond to any Codex communication.
+  The Wizard, task completion notices, or plan review results. Use this skill to correctly
+  parse, validate, triage, and respond to any Wizard communication.
 user-invocable: false
 ---
 
-# tmux-handler — Handle incoming messages from Codex via tmux
+# tmux-handler — Handle incoming messages from The Wizard via tmux
 
 ## Trigger
 
