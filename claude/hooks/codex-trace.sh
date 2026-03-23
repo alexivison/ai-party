@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Codex Trace Hook
+# Wizard Trace Hook
 # 1. Creates codex APPROVED evidence directly when --review-complete emits CODEX APPROVED
-#    (happens when findings file contains VERDICT: APPROVED from Codex).
+#    (happens when findings file contains VERDICT: APPROVED from The Wizard).
 #    Requires CODEX_REVIEW_RAN sentinel in the same response as proof of review completion.
 # 2. Creates triage override evidence when --triage-override emits TRIAGE_OVERRIDE
 #
@@ -57,7 +57,7 @@ fi
 ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 log_evidence() { echo "$ts | codex-trace | $1 | $session_id" >> "$HOME/.claude/logs/evidence-trace.log"; }
 
-# --- Evidence: Codex approval (via verdict in findings file) ---
+# --- Evidence: Wizard approval (via verdict in findings file) ---
 # --review-complete emits both CODEX_REVIEW_RAN and CODEX APPROVED when findings
 # contain VERDICT: APPROVED. The CODEX_REVIEW_RAN sentinel proves the review
 # actually completed (findings file exists). We require it before writing approval.

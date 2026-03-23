@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Codex Review Gate Hook
+# Wizard Review Gate Hook
 # Hard-blocks tmux-codex.sh --approve — workers cannot self-approve.
-# Codex approval flows through --review-complete (verdict in findings file).
-# All other Codex commands (--review, --prompt, --plan-review, --review-complete)
-# pass through freely. Workflow skills enforce critic-to-Codex sequencing;
+# Wizard approval flows through --review-complete (verdict in findings file).
+# All other Wizard commands (--review, --prompt, --plan-review, --review-complete)
+# pass through freely. Workflow skills enforce critic-to-Wizard sequencing;
 # this hook only enforces the self-approval block.
 #
 # Triggered: PreToolUse on Bash tool
@@ -28,8 +28,8 @@ if ! echo "$COMMAND" | grep -qE '(^|[;&|] *)([^ ]*/)?tmux-codex\.sh'; then
   exit 0
 fi
 
-# --approve is BLOCKED — only Codex can approve (via verdict in findings file)
-# Workers must use --review-complete <findings_file>, which reads the verdict Codex wrote.
+# --approve is BLOCKED — only The Wizard can approve (via verdict in findings file)
+# Workers must use --review-complete <findings_file>, which reads the verdict The Wizard wrote.
 if echo "$COMMAND" | grep -qE 'tmux-codex\.sh +--approve'; then
   hook_log "codex-gate" "$SESSION_ID" "deny" "--approve blocked"
   cat << EOF

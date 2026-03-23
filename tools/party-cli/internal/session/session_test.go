@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -1445,9 +1447,10 @@ func TestSetCleanupHook(t *testing.T) {
 	}
 }
 
-// TestCleanupHook_DelegatesToScript verifies the generated hook command
-// calls cleanup-hook.sh with the correct state root and session ID args.
-func TestCleanupHook_DelegatesToScript(t *testing.T) {
+// TestCleanupHook_VariableVisibility verifies the cleanup script and hook
+// are correctly generated. The hook calls a script file (avoiding tmux
+// format expansion), and the script contains proper shell logic.
+func TestCleanupHook_VariableVisibility(t *testing.T) {
 	t.Parallel()
 	svc, runner := setupService(t)
 	runner.sessions["party-vis"] = true
@@ -1456,7 +1459,7 @@ func TestCleanupHook_DelegatesToScript(t *testing.T) {
 		t.Fatalf("setCleanupHook: %v", err)
 	}
 
-	// Find the set-hook call and extract the command
+	// Find the set-hook call and extract the hook command
 	var hookCmd string
 	for _, c := range runner.calls {
 		if len(c.args) >= 3 && c.args[0] == "set-hook" {
@@ -1468,14 +1471,113 @@ func TestCleanupHook_DelegatesToScript(t *testing.T) {
 		t.Fatal("set-hook call not found")
 	}
 
-	if !strings.Contains(hookCmd, "cleanup-hook.sh") {
-		t.Error("hook must delegate to cleanup-hook.sh")
+	// Hook must call the cleanup script, not contain inline shell logic.
+	// This avoids tmux $NAME format expansion entirely.
+	if !strings.Contains(hookCmd, "cleanup.sh") {
+		t.Error("hook must call cleanup.sh script")
 	}
-	if !strings.Contains(hookCmd, svc.Store.Root()) {
-		t.Error("hook must pass state root as argument")
+	// CRITICAL: hook must NOT contain any bare $VAR references that tmux
+	// would expand to empty (the original bug that deleted /tmp/).
+	if strings.Contains(hookCmd, "$W") || strings.Contains(hookCmd, "$SR") {
+		t.Error("hook must not contain $W or $SR — tmux expands them to empty")
 	}
-	if !strings.Contains(hookCmd, "party-vis") {
-		t.Error("hook must pass session ID as argument")
+
+	// Read the generated cleanup script and verify its content.
+	scriptPath := filepath.Join(os.TempDir(), "party-vis", "cleanup.sh")
+	script, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read cleanup script: %v", err)
+	}
+	s := string(script)
+
+	// Script must reference the session ID in manifest paths and rm -rf.
+	if !strings.Contains(s, "party-vis") {
+		t.Error("script must contain session ID")
+	}
+	if !strings.Contains(s, `rm -rf "/tmp/$W"`) {
+		t.Error("script must remove runtime dir via rm -rf /tmp/$W")
+	}
+
+	// $p must be exported before bash -c so the child shell can see it.
+	if !strings.Contains(s, "export p") {
+		t.Error("script must export p before bash -c")
+	}
+
+	// Perl must use system() not exec() to hold flock during rewrite.
+	if strings.Contains(s, "exec @ARGV") {
+		t.Error("script must use system() not exec() to hold flock")
+	}
+	if !strings.Contains(s, "system(@ARGV") {
+		t.Error("script must use system() to hold flock while bash -c runs")
+	}
+}
+
+// TestCleanupHook_SpacesInRoot verifies paths are properly quoted when the
+// state root contains spaces (PARTY_STATE_ROOT is user-configurable).
+func TestCleanupHook_SpacesInRoot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir() + "/party state root"
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	store, err := state.NewStore(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	runner := newMockRunner()
+	runner.sessions["party-sp"] = true
+	client := tmux.NewClient(runner)
+	svc := NewService(store, client, "")
+
+	if err := svc.setCleanupHook(t.Context(), "party-sp"); err != nil {
+		t.Fatalf("setCleanupHook: %v", err)
+	}
+
+	// Read the generated cleanup script and verify the state root is quoted.
+	scriptPath := filepath.Join(os.TempDir(), "party-sp", "cleanup.sh")
+	script, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read cleanup script: %v", err)
+	}
+	s := string(script)
+
+	// State root must be single-quoted in the SR= assignment to handle spaces.
+	if !strings.Contains(s, "'"+root+"'") {
+		t.Errorf("state root with spaces must be single-quoted in script; got:\n%s", s)
+	}
+}
+
+// TestCleanupHook_ApostropheInRoot verifies paths with apostrophes are safe.
+func TestCleanupHook_ApostropheInRoot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir() + "/party'root"
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	store, err := state.NewStore(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	runner := newMockRunner()
+	runner.sessions["party-ap"] = true
+	client := tmux.NewClient(runner)
+	svc := NewService(store, client, "")
+
+	if err := svc.setCleanupHook(t.Context(), "party-ap"); err != nil {
+		t.Fatalf("setCleanupHook: %v", err)
+	}
+
+	// Read the script and verify it's syntactically valid shell.
+	scriptPath := filepath.Join(os.TempDir(), "party-ap", "cleanup.sh")
+	script, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read cleanup script: %v", err)
+	}
+
+	// bash -n checks syntax without executing.
+	cmd := exec.CommandContext(t.Context(), "bash", "-n", scriptPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("cleanup script has syntax errors: %v\n%s\nscript:\n%s", err, out, script)
 	}
 }
 

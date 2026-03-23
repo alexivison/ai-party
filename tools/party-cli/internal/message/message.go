@@ -50,7 +50,8 @@ func (s *Service) Relay(ctx context.Context, workerID, message string) error {
 		return fmt.Errorf("resolve claude pane in %q: %w", workerID, err)
 	}
 
-	msg, err := prepareMessage(message)
+	prefixed := "[MASTER] " + message
+	msg, err := prepareMessage(prefixed)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,8 @@ func (s *Service) Broadcast(ctx context.Context, masterID, message string) (Broa
 		return BroadcastResult{}, nil
 	}
 
-	msg, err := prepareMessage(message)
+	prefixed := "[MASTER] " + message
+	msg, err := prepareMessage(prefixed)
 	if err != nil {
 		return BroadcastResult{}, err
 	}

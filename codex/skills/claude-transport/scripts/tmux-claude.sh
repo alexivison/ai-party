@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tmux-claude.sh — Codex's direct interface to Claude via tmux
+# tmux-claude.sh — The Wizard's direct interface to Claude via tmux
 # Replaces call_claude.sh
 set -euo pipefail
 

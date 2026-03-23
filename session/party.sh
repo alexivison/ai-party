@@ -83,7 +83,21 @@ while [[ $# -gt 0 ]]; do
       ;;
     --stop)
       party_resolve_cli_bin || exit 1
-      exec "${PARTY_CLI_CMD[@]}" stop ${2:+"$2"}
+      if [[ -n "${2:-}" ]]; then
+        exec "${PARTY_CLI_CMD[@]}" stop "$2"
+      elif [[ -n "${TMUX:-}" ]]; then
+        # No argument: stop current session only (not all)
+        _current="$(tmux display-message -p '#{session_name}' 2>/dev/null)"
+        if [[ "$_current" == party-* ]]; then
+          exec "${PARTY_CLI_CMD[@]}" stop "$_current"
+        else
+          echo "Error: not in a party session. Specify a session ID." >&2
+          exit 1
+        fi
+      else
+        echo "Error: --stop requires a session ID when run outside tmux." >&2
+        exit 1
+      fi
       ;;
     --delete)
       party_resolve_cli_bin || exit 1
