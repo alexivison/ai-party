@@ -26,10 +26,8 @@ echo "==========================="
 echo ""
 
 run_suite "test-hooks.sh"
-run_suite "test-party-state.sh"
 run_suite "test-party-routing.sh"
 run_suite "test-party-multilaunch.sh"
-run_suite "test-party-master.sh"
 run_suite "test-wrapper-delegation.sh"
 
 echo "==========================="

@@ -74,6 +74,7 @@ assert "party_attach: targets correct session" \
 unset TMUX
 
 # Outside tmux: should use attach (mock binary because exec bypasses functions)
+unset -f tmux
 _mock_bin="$(mktemp -d)"
 printf '#!/bin/bash\necho "$@"\n' > "$_mock_bin/tmux"
 chmod +x "$_mock_bin/tmux"
