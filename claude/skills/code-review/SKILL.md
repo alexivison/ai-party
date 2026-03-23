@@ -56,7 +56,7 @@ One paragraph: what's good, what needs work.
 Exactly ONE of: **APPROVE** or **REQUEST_CHANGES** or **NEEDS_DISCUSSION**
 One sentence explanation.
 
-The verdict line must contain exactly one verdict keyword. Never include multiple verdict keywords in the same response — hooks parse the last occurrence to create marker files, and mixed verdicts cause false gate blocks.
+The verdict line must contain exactly one verdict keyword. Never include multiple verdict keywords in the same response — hooks parse the last occurrence to record evidence, and mixed verdicts cause false gate blocks.
 ```
 
 ## Example

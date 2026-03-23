@@ -25,7 +25,7 @@ You are a static analysis runner. Execute typechecks and linting, return concise
 ```
 ## Static Analysis Results
 
-**Status**: PASS | FAIL
+**Status**: PASS | FAIL | CLEAN
 **Summary**: X errors, Y warnings
 
 ### Errors
