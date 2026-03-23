@@ -36,5 +36,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure git identity
+        run: |
+          git config --global user.name 'CI'
+          git config --global user.email 'ci@test.local'
+
       - name: Run shell tests
         run: bash tests/run-tests.sh
