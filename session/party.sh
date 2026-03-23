@@ -142,7 +142,7 @@ done
 # --- Start a new session via party-cli ---
 party_resolve_cli_bin || exit 1
 
-start_args=(start)
+start_args=(start --cwd "$PWD")
 [[ -n "$_party_title" ]]        && start_args+=("$_party_title")
 [[ "$_party_master" -eq 1 ]]    && start_args+=(--master)
 [[ -n "$_party_master_id" ]]    && start_args+=(--master-id "$_party_master_id")
