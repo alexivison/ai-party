@@ -65,7 +65,9 @@ party_attach() {
   if [[ -n "${TMUX:-}" ]]; then
     tmux switch-client -t "$session"
   else
-    exec tmux attach -t "$session"
+    # No exec — let the shell survive after tmux detaches so the user
+    # can reattach to other sessions instead of losing the terminal.
+    tmux attach -t "$session"
   fi
 }
 
