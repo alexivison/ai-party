@@ -111,12 +111,19 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		prevH := m.Height
 		m.Width = msg.Width
 		m.Height = msg.Height
 		if m.tracker != nil {
 			m.tracker.width = msg.Width
 			m.tracker.height = msg.Height
 			m.tracker.input.Width = max(10, msg.Width-8)
+		}
+		// When the pane shrinks, the shorter render leaves stale trailing
+		// lines from the previous taller render. Clear only on shrink to
+		// avoid flicker on expand or same-size pings.
+		if msg.Height < prevH {
+			return m, tea.ClearScreen
 		}
 		return m, nil
 
@@ -127,6 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		var cmds []tea.Cmd
 		if m.resolved {
 			// Foreign session — ignore entirely.
 			if msg.id != m.SessionID {
@@ -135,6 +143,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Same session: allow promotion (worker→master) and metadata refresh.
 			if msg.mode == ViewMaster && m.Mode != ViewMaster {
 				m.Mode = ViewMaster
+				// Promotion changes the entire View layout; clear to prevent
+				// stale worker-view lines from bleeding through.
+				cmds = append(cmds, tea.ClearScreen)
 			}
 			m.SessionTitle = msg.title
 			m.SessionCwd = msg.cwd
@@ -151,13 +162,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Mode == ViewMaster && m.tracker == nil && m.trackerFactory != nil {
 			t := m.trackerFactory(m.SessionID)
 			m.tracker = &t
+			// Force full repaint when tracker is first created so any
+			// pre-tracker render artifacts are cleared.
+			cmds = append(cmds, tea.ClearScreen)
 		}
 		if m.tracker != nil {
 			m.tracker.width = m.Width
 			m.tracker.height = m.Height
 			m.tracker.refreshWorkers()
 		}
-		return m, tea.Batch(m.refreshCodexStatus(), m.refreshEvidence())
+		cmds = append(cmds, m.refreshCodexStatus(), m.refreshEvidence())
+		return m, tea.Batch(cmds...)
 
 	case codexStatusMsg:
 		m.CodexStatus = msg.status

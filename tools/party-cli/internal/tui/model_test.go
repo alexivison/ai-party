@@ -411,6 +411,84 @@ func TestModel_WindowSizeMsg(t *testing.T) {
 	}
 }
 
+func TestModel_WindowSizeMsg_ShrinkClearsScreen(t *testing.T) {
+	t.Parallel()
+
+	m := NewModelWithResolver(stubResolver("party-sz", ViewWorker))
+	m.Width = 80
+	m.Height = 40
+
+	// Shrink: should return a command (ClearScreen) to prevent stale lines.
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if cmd == nil {
+		t.Error("height shrink should return a clear-screen command")
+	}
+}
+
+func TestModel_WindowSizeMsg_ExpandNoCommand(t *testing.T) {
+	t.Parallel()
+
+	m := NewModelWithResolver(stubResolver("party-sz", ViewWorker))
+	m.Width = 80
+	m.Height = 24
+
+	// Expand: should return nil (no flicker needed).
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	if cmd != nil {
+		t.Error("height expand should not return a command")
+	}
+}
+
+func TestModel_TrackerCreation_ClearsScreen(t *testing.T) {
+	t.Parallel()
+
+	factory := func(masterID string) TrackerModel {
+		return NewTrackerModel(masterID, stubFetcher(nil), &fakeActions{})
+	}
+	m := NewModelWithResolver(stubResolver("party-m", ViewMaster))
+	m.trackerFactory = factory
+	m.Width = 80
+	m.Height = 24
+
+	// Simulate session resolution — triggers tracker creation.
+	updated, cmd := m.Update(sessionMsg{id: "party-m", mode: ViewMaster})
+	model := updated.(Model)
+
+	if model.tracker == nil {
+		t.Fatal("tracker should be created on master sessionMsg")
+	}
+	if cmd == nil {
+		t.Error("tracker creation should return a command batch including clear-screen")
+	}
+}
+
+func TestModel_Promotion_ClearsScreen(t *testing.T) {
+	t.Parallel()
+
+	factory := func(masterID string) TrackerModel {
+		return NewTrackerModel(masterID, stubFetcher(nil), &fakeActions{})
+	}
+	m := NewModelWithResolver(stubResolver("party-p", ViewWorker))
+	m.trackerFactory = factory
+	m.Width = 80
+	m.Height = 24
+
+	// First resolve as worker.
+	updated, _ := m.Update(sessionMsg{id: "party-p", mode: ViewWorker})
+	m = updated.(Model)
+
+	// Promote to master — should clear screen.
+	updated, cmd := m.Update(sessionMsg{id: "party-p", mode: ViewMaster})
+	model := updated.(Model)
+
+	if model.Mode != ViewMaster {
+		t.Error("mode should be promoted to master")
+	}
+	if cmd == nil {
+		t.Error("promotion to master should return a command batch including clear-screen")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ViewMode stringer
 // ---------------------------------------------------------------------------
