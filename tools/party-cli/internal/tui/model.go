@@ -135,6 +135,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		var cmds []tea.Cmd
+		needsClear := false
 		if m.resolved {
 			// Foreign session — ignore entirely.
 			if msg.id != m.SessionID {
@@ -143,9 +144,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Same session: allow promotion (worker→master) and metadata refresh.
 			if msg.mode == ViewMaster && m.Mode != ViewMaster {
 				m.Mode = ViewMaster
-				// Promotion changes the entire View layout; clear to prevent
-				// stale worker-view lines from bleeding through.
-				cmds = append(cmds, tea.ClearScreen)
+				needsClear = true // layout changes entirely
 			}
 			m.SessionTitle = msg.title
 			m.SessionCwd = msg.cwd
@@ -162,8 +161,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.Mode == ViewMaster && m.tracker == nil && m.trackerFactory != nil {
 			t := m.trackerFactory(m.SessionID)
 			m.tracker = &t
-			// Force full repaint when tracker is first created so any
-			// pre-tracker render artifacts are cleared.
+			needsClear = true // pre-tracker render artifacts
+		}
+		// Single ClearScreen for any layout-disrupting transition
+		// (promotion, tracker creation, or both at once).
+		if needsClear {
 			cmds = append(cmds, tea.ClearScreen)
 		}
 		if m.tracker != nil {
