@@ -5,3 +5,4 @@ tmux-capture-*.txt
 
 # Go build artifacts
 tools/party-tracker/party-tracker
+tools/party-cli/party-cli
