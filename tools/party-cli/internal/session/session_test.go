@@ -753,6 +753,9 @@ func TestPromote_Classic(t *testing.T) {
 	if m.SessionType != "master" {
 		t.Fatalf("expected master, got %q", m.SessionType)
 	}
+	if m.WindowName != "party (worker) [master]" {
+		t.Fatalf("expected manifest WindowName updated, got %q", m.WindowName)
+	}
 
 	// Verify codex pane replaced with tracker
 	if runner.paneRoles["party-worker:0.0"] != "tracker" {
@@ -800,6 +803,9 @@ func TestPromote_Sidebar(t *testing.T) {
 	}
 	if m.SessionType != "master" {
 		t.Fatalf("expected master, got %q", m.SessionType)
+	}
+	if m.WindowName != "party (sidebar-worker) [master]" {
+		t.Fatalf("expected manifest WindowName updated, got %q", m.WindowName)
 	}
 
 	// codex_thread_id should be cleared — master mode has no Wizard.
