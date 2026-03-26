@@ -25,6 +25,11 @@ Always check and report as `[must]` when violated:
 1. Behavior-changing production code without corresponding test updates in the same diff
 2. Out-of-scope file modifications without explicit scope-exception rationale in prompt context
 3. Obvious regression paths introduced by the change
+4. DRY violations: same string/number literal used 2+ times without a named constant
+5. DRY violations: code blocks repeated 2+ times (even 3-5 lines) that should be a helper
+6. Functions doing multiple unrelated things (should be split)
+7. Magic numbers/strings: unexplained numeric or string literals that aren't self-evident
+8. Complex boolean expressions (3+ clauses) inlined without extraction to a named variable
 
 ## Severity
 

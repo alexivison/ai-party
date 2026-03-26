@@ -23,7 +23,9 @@ Rules for reviewing code changes. Use `[must]`, `[q]`, `[nit]` labels.
 | Function length | >50 lines |
 | Nesting depth | >4 levels |
 | Parameters | >5 |
-| Duplicate code | >10 lines repeated |
+| Duplicate code | >5 lines repeated (or >3 lines repeated 3+ times) |
+| Magic numbers/strings | Literals used 2+ times without a named constant |
+| Inline complex conditionals | Compound boolean expressions (3+ clauses) not extracted to a named variable |
 
 ### Warning `[q]`
 
@@ -32,6 +34,8 @@ Rules for reviewing code changes. Use `[must]`, `[q]`, `[nit]` labels.
 | Function length | >30 lines |
 | Nesting depth | >3 levels |
 | Parameters | >4 |
+| Unnamed numeric literals | Any non-obvious number (not 0, 1, -1) without a named constant |
+| String literal reuse | Same string literal used 2+ times in a file |
 
 ### Complexity Delta Rule
 
@@ -55,6 +59,9 @@ Regressions block even if absolute values are acceptable.
 | Comments: outdated or misleading | `[must]` |
 | Comments: missing on non-obvious logic | `[q]` |
 | YAGNI: unnecessary features/complexity | `[q]` |
+| DRY: repeated code/string/number patterns | `[must]` |
+| Magic values: unexplained literals | `[q]` |
+| God function: does multiple unrelated things | `[must]` |
 | Style guide violation | `[nit]` |
 
 ---

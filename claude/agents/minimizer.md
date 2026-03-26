@@ -33,6 +33,10 @@ You are a minimizer. Review code changes for bloat and unnecessary complexity. I
 - Test helpers/mocking when simpler approaches work
 - Repetitive test cases that could use parameterization
 - Edge case tests for unrealistic scenarios
+- Repeated string/number literals that should be a named constant
+- Copy-pasted code blocks (even 3-5 lines) that should be extracted to a shared function
+- Long functions (>30 lines) doing multiple things that should be split
+- Inline compound boolean expressions that should be extracted to a named variable
 
 ## What NOT to Flag
 
