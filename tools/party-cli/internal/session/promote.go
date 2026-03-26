@@ -50,6 +50,17 @@ func (s *Service) Promote(ctx context.Context, sessionID string) error {
 	// Clear the tmux env var so shell scripts don't see a stale Codex thread.
 	_ = s.Client.UnsetEnvironment(ctx, sessionID, "CODEX_THREAD_ID")
 
+	// Rename the window to reflect the new master role.
+	newWinName := windowName(m.Title, roleMaster)
+	winIdx := tmux.WindowCodex // classic: single window 0
+	if layout == "sidebar" {
+		winIdx = tmux.WindowWorkspace
+	}
+	winTarget := fmt.Sprintf("%s:%d", sessionID, winIdx)
+	if err := s.Client.RenameWindow(ctx, winTarget, newWinName); err != nil {
+		return fmt.Errorf("rename window: %w", err)
+	}
+
 	cliCmd, err := s.resolveCLICmd()
 	if err != nil {
 		return fmt.Errorf("resolve party-cli: %w", err)

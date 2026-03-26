@@ -11,11 +11,11 @@ import (
 
 // ContinueResult holds the outcome of a Continue operation.
 type ContinueResult struct {
-	SessionID        string
-	Reattach         bool     // true if session was already running
-	Master           bool
-	RevivedWorkers   []string // worker IDs auto-continued on master cascade
-	FailedWorkers    []string // worker IDs that failed to auto-continue
+	SessionID      string
+	Reattach       bool // true if session was already running
+	Master         bool
+	RevivedWorkers []string // worker IDs auto-continued on master cascade
+	FailedWorkers  []string // worker IDs that failed to auto-continue
 }
 
 // Continue resumes a stopped session or reattaches to a running one.
@@ -53,9 +53,15 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 		cwd, _ = os.Getwd()
 	}
 
+	role := roleStandalone
+	if m.SessionType == "master" {
+		role = roleMaster
+	} else if m.ExtraString("parent_session") != "" {
+		role = roleWorker
+	}
 	winName := m.WindowName
 	if winName == "" {
-		winName = windowName(m.Title)
+		winName = windowName(m.Title, role)
 	}
 
 	claudeBin := fallback(m.ClaudeBin, resolveBinary("CLAUDE_BIN", "claude", os.Getenv("HOME")+"/.local/bin/claude"))
@@ -86,6 +92,7 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 		claudeResumeID: claudeResumeID,
 		codexResumeID:  codexResumeID,
 		master:         isMaster,
+		worker:         m.ExtraString("parent_session") != "",
 	}); err != nil {
 		return ContinueResult{}, err
 	}

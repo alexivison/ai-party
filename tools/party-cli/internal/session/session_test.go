@@ -910,17 +910,22 @@ func TestWindowName(t *testing.T) {
 
 	tests := map[string]struct {
 		title string
+		role  sessionRole
 		want  string
 	}{
-		"with title":  {title: "my-project", want: "party (my-project)"},
-		"empty title": {title: "", want: "work"},
+		"with title":        {title: "my-project", role: roleStandalone, want: "party (my-project)"},
+		"empty title":       {title: "", role: roleStandalone, want: "work"},
+		"master with title": {title: "my-project", role: roleMaster, want: "party (my-project) [master]"},
+		"master no title":   {title: "", role: roleMaster, want: "work [master]"},
+		"worker with title": {title: "my-project", role: roleWorker, want: "party (my-project) [worker]"},
+		"worker no title":   {title: "", role: roleWorker, want: "work [worker]"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := windowName(tc.title)
+			got := windowName(tc.title, tc.role)
 			if got != tc.want {
-				t.Errorf("windowName(%q): got %q, want %q", tc.title, got, tc.want)
+				t.Errorf("windowName(%q, %q): got %q, want %q", tc.title, tc.role, got, tc.want)
 			}
 		})
 	}
@@ -1546,7 +1551,7 @@ func TestLaunchSidebar_Success(t *testing.T) {
 	svc, runner := setupService(t)
 	runner.sessions["party-ls"] = true
 
-	if err := svc.launchSidebar(t.Context(), "party-ls", "/tmp", "echo codex", "echo claude", "test"); err != nil {
+	if err := svc.launchSidebar(t.Context(), "party-ls", "/tmp", "echo codex", "echo claude", "test", false); err != nil {
 		t.Fatalf("launchSidebar: %v", err)
 	}
 	if runner.paneRoles["party-ls:0.0"] != "codex" {
@@ -1890,7 +1895,7 @@ func TestLaunchSidebar_ErrorOnRename(t *testing.T) {
 
 	runner.sessions["party-serr2"] = true
 
-	err := svc.launchSidebar(t.Context(), "party-serr2", "/tmp", "codex", "claude", "test")
+	err := svc.launchSidebar(t.Context(), "party-serr2", "/tmp", "codex", "claude", "test", false)
 	if err == nil {
 		t.Fatal("expected error from launchSidebar on rename")
 	}
@@ -1913,7 +1918,7 @@ func TestLaunchSidebar_ErrorPropagation(t *testing.T) {
 
 	runner.sessions["party-serr"] = true
 
-	err := svc.launchSidebar(t.Context(), "party-serr", "/tmp", "codex", "claude", "test")
+	err := svc.launchSidebar(t.Context(), "party-serr", "/tmp", "codex", "claude", "test", false)
 	if err == nil {
 		t.Fatal("expected error from launchSidebar")
 	}
