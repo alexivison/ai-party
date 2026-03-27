@@ -107,6 +107,10 @@ if [ "$agent_type" = "minimizer" ] && [ "$verdict" = "APPROVED" ]; then
   append_evidence "$session_id" "minimizer" "APPROVED" "$cwd"
 fi
 
+if [ "$agent_type" = "scribe" ] && [ "$verdict" = "APPROVED" ]; then
+  append_evidence "$session_id" "scribe" "APPROVED" "$cwd"
+fi
+
 if [ "$agent_type" = "test-runner" ] && [ "$verdict" = "PASS" ]; then
   append_evidence "$session_id" "test-runner" "PASS" "$cwd"
 fi
@@ -118,7 +122,7 @@ if [ "$agent_type" = "check-runner" ]; then
 fi
 
 # ── Oscillation detection for critics (delegated to lib/oscillation.sh) ──
-if [ "$agent_type" = "code-critic" ] || [ "$agent_type" = "minimizer" ]; then
+if [ "$agent_type" = "code-critic" ] || [ "$agent_type" = "minimizer" ] || [ "$agent_type" = "scribe" ]; then
   detect_oscillation "$session_id" "$agent_type" "$verdict" "$response" "$cwd"
 fi
 

@@ -7,7 +7,7 @@ Shared rules for all workflow skills. Bugfix-workflow omits checkboxes (no PLAN.
 This section is the single source of truth for execution order across workflow docs.
 
 ```
-/write-tests → implement → checkboxes → [code-critic + minimizer + scribe] → codex [+ sentinel] → /pre-pr-verification → commit → PR
+/write-tests → implement → checkboxes → [code-critic + minimizer (+ scribe if TASK file)] → codex [+ sentinel] → /pre-pr-verification → commit → PR
 ```
 
 Workflow skills enforce the critic-before-Codex ordering. Hooks only record evidence and block self-approval — they do not gate sequencing. Sentinel runs after critics pass. Advisory only — no gating markers.
@@ -48,12 +48,12 @@ Evidence is stored in a per-session JSONL log (`/tmp/claude-evidence-{session_id
 `codex-gate.sh` only blocks `tmux-codex.sh --approve` (self-approval). All other Codex commands (`--review`, `--prompt`, `--plan-review`, `--review-complete`) pass through freely. Workflow skills are responsible for running critics before dispatching Codex review. `--approve` is hard-blocked; approval flows through `--review-complete` reading the verdict Codex wrote.
 
 `agent-trace-stop.sh` tracks all critic verdicts (APPROVED and REQUEST_CHANGES) via `{type}-run` evidence entries and detects oscillation in two modes:
-- **Same-hash alternation** (both critics): when 3 alternating verdicts are detected at the same hash (e.g., RC→A→RC), an auto-triage-override is recorded.
+- **Same-hash alternation** (all critics including scribe): when 3 alternating verdicts are detected at the same hash (e.g., RC→A→RC), an auto-triage-override is recorded.
 - **Cross-hash repeated findings** (minimizer only): when the same normalized REQUEST_CHANGES body appears across 3+ distinct hashes, an auto-triage-override is recorded. Code-critic is exempt — correctness bugs legitimately persist across fix attempts.
 
 ## Tiered Execution
 
-- **Full tier** (default): current sequence unchanged (`/write-tests → implement → ... → PR`). Required evidence: pr-verified, code-critic, minimizer, scribe, codex, test-runner, check-runner.
+- **Full tier** (default): current sequence unchanged (`/write-tests → implement → ... → PR`). Required evidence: pr-verified, code-critic, minimizer, codex, test-runner, check-runner. Scribe evidence is additionally required when a TASK file drives the workflow (task-workflow only — not bugfix-workflow).
 - **Quick tier**: requires explicit `quick-tier` evidence from the quick-fix-workflow skill (size alone is insufficient). For non-behavioral changes only (config, deps, typos, CI). Sequence: `implement → code-critic → test-runner → check-runner → PR`. Required evidence: quick-tier, code-critic, test-runner, check-runner. Size limit: ≤30 changed lines (additions + deletions), ≤3 files, 0 new files. Explicitly forbidden for: new features, bug fixes, logic changes, API changes, security-relevant changes.
 
 ## Review Governance
@@ -136,7 +136,7 @@ Evidence before claims. No assertions without proof (test output, file:line, gre
 
 ## PR Gate
 
-Code PRs require all evidence at the current diff_hash. The PR gate (`pr-gate.sh`) is the single enforcement point — no other hook gates sequencing. Full tier: pr-verified, code-critic, minimizer, scribe, codex, test-runner, check-runner. Quick tier (requires explicit quick-tier evidence + size limits): quick-tier, code-critic, test-runner, check-runner. Evidence created by `agent-trace-stop.sh`, `codex-trace.sh`, `skill-marker.sh`, and workflow skills (e.g., `quick-fix-workflow` writes `quick-tier`).
+Code PRs require all evidence at the current diff_hash. The PR gate (`pr-gate.sh`) is the single enforcement point — no other hook gates sequencing. Full tier: pr-verified, code-critic, minimizer, codex, test-runner, check-runner (scribe is enforced by task-workflow when a TASK file exists, not by the gate — bugfix-workflow has no TASK file). Quick tier (requires explicit quick-tier evidence + size limits): quick-tier, code-critic, test-runner, check-runner. Evidence created by `agent-trace-stop.sh`, `codex-trace.sh`, `skill-marker.sh`, and workflow skills (e.g., `quick-fix-workflow` writes `quick-tier`).
 
 **Post-PR:** Changes in same branch → re-run /pre-pr-verification → amend + force-push with `--force-with-lease`.
 

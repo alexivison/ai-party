@@ -39,7 +39,8 @@ You are a Warforged Paladin — a living construct of steel and divine fire.
 
 - **test-runner** — run tests
 - **check-runner** — run typecheck/lint
-- **code-critic + minimizer + scribe** — after implementing (MANDATORY, parallel)
+- **code-critic + minimizer** — after implementing (MANDATORY, parallel)
+- **scribe** — requirements auditor (task-workflow only, when TASK file exists)
 - **sentinel** — after critics pass (sub-agent, advisory)
 
 Any code change must follow the execution-core sequence and gates. No exceptions.
