@@ -100,18 +100,18 @@ case "$MODE" in
     ;;
 
   --report-all)
-    # Find all metrics files and generate reports
+    # Find all metrics files in persistent storage and generate reports
     found=0
-    for f in /tmp/claude-review-metrics-*.jsonl; do
+    for f in "$_METRICS_DIR"/*.jsonl; do
       [ -f "$f" ] || continue
-      sid=$(basename "$f" | sed 's/^claude-review-metrics-//;s/\.jsonl$//')
+      sid=$(basename "$f" .jsonl)
       [ -n "$sid" ] || continue
       found=1
       generate_report "$sid"
       echo ""
     done
     if [ "$found" -eq 0 ]; then
-      echo "No review metrics files found."
+      echo "No review metrics files found in $_METRICS_DIR"
     fi
     ;;
 

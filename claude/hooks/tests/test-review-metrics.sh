@@ -57,7 +57,7 @@ trap cleanup EXIT
 
 echo "=== metrics_file: correct path ==="
 MFILE=$(metrics_file "$SESSION")
-assert "Correct path format" '[[ "$MFILE" == "/tmp/claude-review-metrics-test-metrics-"*".jsonl" ]]'
+assert "Correct path format" '[[ "$MFILE" == *"/.claude/logs/review-metrics/test-metrics-"*".jsonl" ]]'
 
 # ═══ record_finding_raised ═══════════════════════════════════════════════════
 

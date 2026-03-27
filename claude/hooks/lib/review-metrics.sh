@@ -4,9 +4,8 @@
 # Tracks the full lifecycle of review findings:
 #   finding_raised → triage → resolution
 #
-# Each event is a JSONL entry in /tmp/claude-review-metrics-{session_id}.jsonl.
-# Designed for post-hoc analysis: how well do reviews catch real bugs,
-# and how often does Claude ignore or override them?
+# Each event is a JSONL entry in ~/.claude/logs/review-metrics/{session_id}.jsonl.
+# Persistent across reboots for long-term review effectiveness analysis.
 #
 # Usage: source "$(dirname "$0")/lib/review-metrics.sh"
 #   (evidence.sh must be sourced first for compute_diff_hash, _resolve_cwd, _atomic_append)
@@ -17,11 +16,16 @@ if [ -z "${BASH_VERSION:-}" ]; then
   return 1 2>/dev/null || exit 1
 fi
 
+# ── Storage directory ──
+
+_METRICS_DIR="${HOME}/.claude/logs/review-metrics"
+mkdir -p "$_METRICS_DIR" 2>/dev/null || true
+
 # ── Path helper ──
 
 metrics_file() {
   local session_id="$1"
-  echo "/tmp/claude-review-metrics-${session_id}.jsonl"
+  echo "${_METRICS_DIR}/${session_id}.jsonl"
 }
 
 # ── Internal: atomic append to metrics file ──

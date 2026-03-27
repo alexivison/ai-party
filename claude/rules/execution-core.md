@@ -53,7 +53,7 @@ Evidence is stored in a per-session JSONL log (`/tmp/claude-evidence-{session_id
 
 ## Review Metrics
 
-Review effectiveness metrics are tracked in a per-session JSONL log (`/tmp/claude-review-metrics-{session_id}.jsonl`). The metrics capture the full lifecycle of review findings for post-hoc analysis of reviewer quality and Claude's triage accuracy.
+Review effectiveness metrics are tracked in persistent per-session JSONL logs (`~/.claude/logs/review-metrics/{session_id}.jsonl`). The metrics capture the full lifecycle of review findings for long-term analysis of reviewer quality and Claude's triage accuracy.
 
 **Events tracked:**
 - `finding_raised` — A reviewer produced a finding (source, severity, category, file, line, description)
