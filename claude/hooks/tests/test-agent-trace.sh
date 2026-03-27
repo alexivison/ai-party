@@ -176,6 +176,11 @@ assert "minimizer APPROVE → minimizer evidence" 'has_evidence "minimizer"'
 assert "minimizer APPROVE → no code-critic evidence" '! has_evidence "code-critic"'
 
 clean_evidence
+run_stop "$(stop_input scribe "**APPROVE**")"
+assert "scribe APPROVE → scribe evidence" 'has_evidence "scribe"'
+assert "scribe APPROVE → no code-critic evidence" '! has_evidence "code-critic"'
+
+clean_evidence
 run_stop "$(stop_input check-runner "All passed.\n\nPASS")"
 assert "check-runner PASS → check-runner evidence" 'has_evidence "check-runner"'
 

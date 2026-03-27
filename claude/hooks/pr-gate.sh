@@ -6,6 +6,7 @@
 #   - Quick tier: requires explicit "quick-tier" evidence (from quick-fix-workflow)
 #     + code-critic + test-runner + check-runner. Size-gated: ≤30 lines, ≤3 files, 0 new files.
 #   - Full tier (default): pr-verified, code-critic, minimizer, codex, test-runner, check-runner
+#     (scribe evidence is checked when present — enforced by task-workflow, not the gate)
 #
 # The quick tier ONLY activates when quick-tier evidence exists — size alone is
 # insufficient. This prevents behavioral changes from skipping review.

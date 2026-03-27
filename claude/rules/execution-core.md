@@ -7,7 +7,7 @@ Shared rules for all workflow skills. Bugfix-workflow omits checkboxes (no PLAN.
 This section is the single source of truth for execution order across workflow docs.
 
 ```
-/write-tests → implement → checkboxes → [code-critic + minimizer] → codex [+ sentinel] → /pre-pr-verification → commit → PR
+/write-tests → implement → checkboxes → [code-critic + minimizer (+ scribe if TASK file)] → codex [+ sentinel] → /pre-pr-verification → commit → PR
 ```
 
 Workflow skills enforce the critic-before-Codex ordering. Hooks only record evidence and block self-approval — they do not gate sequencing. Sentinel runs after critics pass. Advisory only — no gating markers.
@@ -48,12 +48,12 @@ Evidence is stored in a per-session JSONL log (`/tmp/claude-evidence-{session_id
 `codex-gate.sh` only blocks `tmux-codex.sh --approve` (self-approval). All other Codex commands (`--review`, `--prompt`, `--plan-review`, `--review-complete`) pass through freely. Workflow skills are responsible for running critics before dispatching Codex review. `--approve` is hard-blocked; approval flows through `--review-complete` reading the verdict Codex wrote.
 
 `agent-trace-stop.sh` tracks all critic verdicts (APPROVED and REQUEST_CHANGES) via `{type}-run` evidence entries and detects oscillation in two modes:
-- **Same-hash alternation** (both critics): when 3 alternating verdicts are detected at the same hash (e.g., RC→A→RC), an auto-triage-override is recorded.
+- **Same-hash alternation** (all critics including scribe): when 3 alternating verdicts are detected at the same hash (e.g., RC→A→RC), an auto-triage-override is recorded.
 - **Cross-hash repeated findings** (minimizer only): when the same normalized REQUEST_CHANGES body appears across 3+ distinct hashes, an auto-triage-override is recorded. Code-critic is exempt — correctness bugs legitimately persist across fix attempts.
 
 ## Tiered Execution
 
-- **Full tier** (default): current sequence unchanged (`/write-tests → implement → ... → PR`). Required evidence: pr-verified, code-critic, minimizer, codex, test-runner, check-runner.
+- **Full tier** (default): current sequence unchanged (`/write-tests → implement → ... → PR`). Gate-enforced evidence: pr-verified, code-critic, minimizer, codex, test-runner, check-runner. Scribe is workflow-enforced by task-workflow (not gate-enforced) — it runs when a TASK file exists but bugfix-workflow has no TASK file, so scribe cannot be a universal gate requirement.
 - **Quick tier**: requires explicit `quick-tier` evidence from the quick-fix-workflow skill (size alone is insufficient). For non-behavioral changes only (config, deps, typos, CI). Sequence: `implement → code-critic → test-runner → check-runner → PR`. Required evidence: quick-tier, code-critic, test-runner, check-runner. Size limit: ≤30 changed lines (additions + deletions), ≤3 files, 0 new files. Explicitly forbidden for: new features, bug fixes, logic changes, API changes, security-relevant changes.
 
 ## Review Governance
@@ -88,11 +88,11 @@ Classify every finding before acting:
 | Implement | Done | Checkboxes | NO |
 | Minimality + Scope Gate | PASS | Critics | NO |
 | Minimality + Scope Gate | Scope violation w/o justification | NEEDS_DISCUSSION | YES |
-| code-critic or minimizer | APPROVE | Wait for other / codex | NO |
-| code-critic or minimizer | REQUEST_CHANGES (blocking) | Fix in one batch + one re-run of both critics | NO |
-| code-critic or minimizer | REQUEST_CHANGES (non-blocking) | Record and treat as effective APPROVE (LLM misclassified) | NO |
-| code-critic or minimizer | NEEDS_DISCUSSION / oscillation / cap | Dispute resolution: re-run critic with context explaining dismissed findings (2 rounds) → escalate to user if unresolved | NO (until dispute cap) |
-| Both critics done, no blocking | — | Run codex | NO |
+| code-critic, minimizer, or scribe | APPROVE | Wait for others / codex | NO |
+| code-critic, minimizer, or scribe | REQUEST_CHANGES (blocking) | Fix in one batch + one re-run of all three | NO |
+| code-critic, minimizer, or scribe | REQUEST_CHANGES (non-blocking) | Record and treat as effective APPROVE (LLM misclassified) | NO |
+| code-critic, minimizer, or scribe | NEEDS_DISCUSSION / oscillation / cap | Dispute resolution: re-run with context explaining dismissed findings (2 rounds) → escalate to user if unresolved | NO (until dispute cap) |
+| All three critics done, no blocking | — | Run codex | NO |
 | codex | APPROVE | /pre-pr-verification | NO |
 | codex | REQUEST_CHANGES (blocking) | Fix in one batch + commit + re-run critics + new `--review` → `--review-complete` | NO |
 | codex | REQUEST_CHANGES (non-blocking) | Record and proceed to /pre-pr-verification | NO |
@@ -136,7 +136,7 @@ Evidence before claims. No assertions without proof (test output, file:line, gre
 
 ## PR Gate
 
-Code PRs require all evidence at the current diff_hash. The PR gate (`pr-gate.sh`) is the single enforcement point — no other hook gates sequencing. Full tier: pr-verified, code-critic, minimizer, codex, test-runner, check-runner. Quick tier (requires explicit quick-tier evidence + size limits): quick-tier, code-critic, test-runner, check-runner. Evidence created by `agent-trace-stop.sh`, `codex-trace.sh`, `skill-marker.sh`, and workflow skills (e.g., `quick-fix-workflow` writes `quick-tier`).
+Code PRs require all evidence at the current diff_hash. The PR gate (`pr-gate.sh`) is the single enforcement point — no other hook gates sequencing. Full tier: pr-verified, code-critic, minimizer, codex, test-runner, check-runner (scribe is enforced by task-workflow when a TASK file exists, not by the gate — bugfix-workflow has no TASK file). Quick tier (requires explicit quick-tier evidence + size limits): quick-tier, code-critic, test-runner, check-runner. Evidence created by `agent-trace-stop.sh`, `codex-trace.sh`, `skill-marker.sh`, and workflow skills (e.g., `quick-fix-workflow` writes `quick-tier`).
 
 **Post-PR:** Changes in same branch → re-run /pre-pr-verification → amend + force-push with `--force-with-lease`.
 
