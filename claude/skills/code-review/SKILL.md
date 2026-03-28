@@ -1,35 +1,31 @@
 ---
 name: code-review
 description: >-
-  Review code for quality, bugs, and guideline compliance. Produces a structured
-  report with severity-labeled findings ([must]/[q]/[nit]) and a verdict. Use when
-  reviewing diffs, checking staged changes, doing pre-commit review, validating PR
-  quality, or when any sub-agent needs to evaluate code changes against project
-  standards. Covers both general and frontend-specific (React, TypeScript, CSS) patterns.
+  Review code for correctness, bugs, and guideline compliance. Produces a
+  structured report with severity-labeled findings ([must]/[q]/[nit]) and a
+  verdict. Loaded by the code-critic agent for SRP, DRY, and correctness checks.
+  Locality, simplicity, and bloat are handled by the minimizer agent separately.
 user-invocable: false
 allowed-tools: Read, Grep, Glob, Bash(git:*)
 ---
 
-# Code Review
+# Code Review — Correctness
 
-Review the current changes for quality, bugs, and best practices. Identify issues only — don't implement fixes.
+Review the current changes for correctness, bugs, and structural quality. Identify issues only — don't implement fixes.
 
 ## Reference Documentation
 
-- **General**: `~/.claude/skills/code-review/reference/general.md` — Five core principles (LoB, SRP, YAGNI, DRY, KISS), quality standards, thresholds
+- **General**: `~/.claude/skills/code-review/reference/general.md` — SRP, DRY, thresholds, quality checklist
 - **Frontend**: `~/.claude/skills/code-review/reference/frontend.md` — React, TypeScript, CSS, testing patterns
 
 Load relevant reference docs based on what's being reviewed.
 
-## Core Principles
+## Principles (this skill's scope)
 
-Every review evaluates changes against five architectural principles. **LoB is the primary principle** — when other principles conflict with it, LoB wins. See `reference/general.md` for detection patterns, feedback templates, and severity mappings.
+1. **SRP** — Single Responsibility: one reason to change per unit
+2. **DRY** — Don't Repeat Yourself: single source of truth *(respects locality — prefer same-file extraction)*
 
-1. **LoB** — Locality of Behavior: behavior should be obvious by looking at that unit of code alone *(primary)*
-2. **SRP** — Single Responsibility: one reason to change per unit
-3. **YAGNI** — You Ain't Gonna Need It: no code for hypothetical futures
-4. **DRY** — Don't Repeat Yourself: single source of truth *(subordinate to LoB — prefer locality over cross-file extraction)*
-5. **KISS** — Keep It Simple: readable beats clever
+Locality (LoB), simplicity (KISS), and bloat (YAGNI) are the minimizer's domain. Do not duplicate that work.
 
 ## Severity Levels
 
@@ -40,11 +36,11 @@ Every review evaluates changes against five architectural principles. **LoB is t
 ## Process
 
 1. Use `git diff` to see staged/unstaged changes
-2. **First check LoB**: does this change scatter behavior that should be local?
-3. Then check SRP, YAGNI, DRY, KISS against the diff
+2. Check SRP and DRY against the diff
+3. Check for bugs, regressions, missing tests, security issues
 4. Review against language-specific guidelines in reference documentation
 5. Be specific with file:line references
-6. Tag each finding with the violated principle (e.g., `[LoB]`, `[SRP]`, `[DRY]`)
+6. Tag each finding with the violated principle (e.g., `[SRP]`, `[DRY]`)
 7. Explain WHY something is an issue (not just what's wrong)
 
 ## Output Format
@@ -78,19 +74,18 @@ The verdict line must contain exactly one verdict keyword. Never include multipl
 ## Code Review Report
 
 ### Summary
-The changes improve error handling and logging. File organization is clean. Need clarification on one utility function.
+The changes improve error handling and logging. Need to fix a missing null check and clarify a validation approach.
 
 ### Must Fix
-- **api.ts:34-45** - [SRP] Missing null check on response.data before accessing properties
-- **utils/format.ts:1-20** - [LoB] This formatter is only used in api.ts — inline it there instead of creating a separate file
+- **api.ts:34-45** - [SRP] Handler is doing validation + serialization + error formatting — split into focused functions
+- **api.ts:80** - Missing null check on response.data before accessing properties
 
 ### Questions
 - **auth.ts:78** - [DRY] Why duplicate validation here instead of reusing middleware?
 
 ### Nits
 - **config.ts:5** - Import order (external packages first)
-- **logger.ts:20** - [KISS] Verbose error object serialization; consider structured format
 
 ### Verdict
-**REQUEST_CHANGES** - Must fix the null check; inline the single-use formatter to preserve locality.
+**REQUEST_CHANGES** - Must fix the null check and split the oversized handler.
 ```

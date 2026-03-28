@@ -1,6 +1,6 @@
-# Code Review Reference
+# Code Review Reference — Correctness
 
-Rules for reviewing code changes. Use `[must]`, `[q]`, `[nit]` labels.
+This reference is loaded by the **code-critic** agent. It covers SRP, DRY, and correctness checks. Locality, simplicity, and bloat are handled by the minimizer agent separately.
 
 ---
 
@@ -14,29 +14,9 @@ Rules for reviewing code changes. Use `[must]`, `[q]`, `[nit]` labels.
 
 ---
 
-## Core Principles
+## Principles
 
-Five architectural principles form the backbone of every review. **LoB is the primary principle** — when other principles conflict with it, LoB wins unless there's an explicit justification. Each violation maps to a severity level and a standard feedback template.
-
-### 1. LoB — Locality of Behavior
-
-> The behaviour of a unit of code should be as obvious as possible by looking only at that unit of code.
-
-**Detection:** Functions whose behavior can't be understood without reading 3+ other files. "Spooky action at a distance" — logic in file A that silently controls behavior in file B. Single-use abstractions that force readers to jump to another file. Side effects hidden behind layers of indirection. Core logic that depends on mutable external state instead of explicit inputs/outputs.
-
-**Feedback template:** "Understanding this [function/component] requires reading [File A], [File B], and [File C]. Collocate the behavior here or inline the abstraction so the logic is obvious on inspection."
-
-| Violation | Severity |
-|-----------|----------|
-| Behavior requires reading 3+ files to understand | `[must]` |
-| Single-use helper in a separate file that should be inlined | `[must]` |
-| DRY extraction that scatters behavior across files for <3 use sites | `[q]` |
-| Side effects hidden behind multiple layers of indirection | `[q]` |
-| Core logic depending on mutable external state instead of explicit inputs | `[q]` |
-
-> **LoB vs DRY:** When DRY extraction would move behavior to another file, prefer locality unless the logic is reused in 3+ places. Flag cross-file extractions with fewer use sites as a LoB violation.
-
-### 2. SRP — Single Responsibility Principle
+### SRP — Single Responsibility Principle
 
 > A function, class, or module should have one, and only one, reason to change. It should do one thing and do it well.
 
@@ -50,28 +30,13 @@ Five architectural principles form the backbone of every review. **LoB is the pr
 | Function >50 lines | `[must]` |
 | Function >30 lines doing 2+ things | `[q]` |
 
-### 3. YAGNI — You Ain't Gonna Need It
-
-> Do not add functionality or complexity until it is actually necessary. Avoid building "generic" solutions for single-use cases.
-
-**Detection:** Unused parameters, over-engineered "plugin" systems for simple tasks, "future-proofing" comments (e.g., "we might need this later"), abstractions with only one implementation.
-
-**Feedback template:** "This implementation adds complexity for a future requirement that doesn't exist yet. Revert to the simplest version that solves the current task to keep the codebase lean."
-
-| Violation | Severity |
-|-----------|----------|
-| Code for hypothetical future needs | `[q]` |
-| Abstraction with only one implementation (no testing justification) | `[q]` |
-| Unused parameters, imports, or variables | `[must]` |
-| "Plugin" architecture for single-use case | `[q]` |
-
-### 4. DRY — Don't Repeat Yourself
+### DRY — Don't Repeat Yourself
 
 > Every piece of knowledge or logic must have a single, unambiguous representation within the system.
 
 **Detection:** Identical logic blocks, duplicated validation regex, copy-pasted unit tests with only minor value changes, repeated string/number literals.
 
-**Feedback template:** "Logic for [Action] is duplicated in [Location A] and [Location B]. Extract this into a shared helper to ensure a single point of truth — but keep it in the same file if both locations are in the same file."
+**Feedback template:** "Logic for [Action] is duplicated in [Location A] and [Location B]. Extract this into a same-file helper to ensure a single point of truth."
 
 | Violation | Severity |
 |-----------|----------|
@@ -81,23 +46,7 @@ Five architectural principles form the backbone of every review. **LoB is the pr
 | Copy-pasted tests that should use parameterization | `[q]` |
 | Same string literal used 2+ times in a file without constant | `[q]` |
 
-> **DRY is subordinate to LoB.** Cross-file extraction for <3 use sites is a LoB violation. Prefer same-file helpers or tolerate minor duplication to preserve locality.
-
-### 5. KISS — Keep It Simple, Stupid
-
-> Simple code is easier to read, maintain, and test than "clever" code.
-
-**Detection:** Deeply nested conditionals (3+ levels), complex ternary operators, "clever" one-liners that are hard to parse at a glance, compound boolean expressions not extracted to named variables.
-
-**Feedback template:** "This logic is unnecessarily complex. Use guard clauses to flatten the nesting or break this 'clever' expression into readable steps."
-
-| Violation | Severity |
-|-----------|----------|
-| Nesting depth >4 levels | `[must]` |
-| Nesting depth >3 levels | `[q]` |
-| Compound boolean expression (3+ clauses) not extracted | `[must]` |
-| Complex ternary needing a comment to understand | `[q]` |
-| "Clever" one-liner that's hard to parse | `[q]` |
+> **DRY respects locality.** Prefer same-file extraction. Only extract to a shared file when logic is reused in 3+ places.
 
 ---
 
@@ -106,26 +55,24 @@ Five architectural principles form the backbone of every review. **LoB is the pr
 | Issue | `[must]` | `[q]` |
 |-------|----------|-------|
 | Function length | >50 lines | >30 lines |
-| Nesting depth | >4 levels | >3 levels |
 | Parameters | >5 | >4 |
 
 ### Complexity Delta Rule
 
 Any change that **degrades** maintainability is `[must]`:
 - Readable function becomes hard to follow
-- Nesting increases significantly
-- Behavior that was local becomes scattered across files
+- New code smell introduced
 
 Regressions block even if absolute values are acceptable.
 
 ---
 
-## Quality Checklist (items not covered above)
+## Quality Checklist
 
 | Check | Severity |
 |-------|----------|
-| Naming: unclear, misleading, or single-letter (except loop index) | `[q]` |
 | Tests missing for new code or bug fix | `[must]` |
+| Naming: unclear, misleading, or single-letter (except loop index) | `[q]` |
 | Comments: outdated or misleading | `[must]` |
 | Comments: missing on non-obvious logic | `[q]` |
 | Style guide violation | `[nit]` |
