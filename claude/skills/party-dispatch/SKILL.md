@@ -4,7 +4,7 @@ description: >-
   Dispatch one or more tasks to parallel party worker sessions. Promotes to
   master and delegates ALL items to workers — the master orchestrates but never
   implements. Supports freeform prompts (single worker), skill-based dispatch
-  (multiple workers), or a mix. Use when the user wants to spawn a worker, fix
+  (multiple workers). Use when the user wants to spawn a worker, fix
   bugs, work on tickets in parallel, or says things like "spawn a worker to do
   X", "fix these tickets", "party bugfix", "dispatch these tasks", "send this
   to a worker", "party spawn". Supports Linear URLs/IDs, local file paths, and
@@ -18,8 +18,7 @@ Dispatch one or more work items to parallel party worker sessions. The master
 promotes itself to orchestrator mode and delegates ALL items to workers — it
 never takes an item for itself.
 
-Works for any number of items: a single freeform task, a batch of tickets, or
-a mix of both.
+Works for any number of items: a single freeform task or a batch of tickets.
 
 ## Usage
 
@@ -33,12 +32,6 @@ a mix of both.
 
 ```
 /party-dispatch <skill> <item1> <item2> [item3 ...]
-```
-
-**Mixed** (skill-based items plus freeform):
-
-```
-/party-dispatch <skill> <item1> <item2> ...
 ```
 
 - `<skill>` — the slash command to invoke (e.g., `/bugfix-workflow`, `/task-workflow`)
