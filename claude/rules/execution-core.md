@@ -94,10 +94,10 @@ Classify every finding before acting:
 | code-critic, minimizer, or scribe | NEEDS_DISCUSSION / oscillation / cap | Dispute resolution: re-run with context explaining dismissed findings (2 rounds) → escalate to user if unresolved | NO (until dispute cap) |
 | All three critics done, no blocking | — | Run codex | NO |
 | codex | APPROVE | /pre-pr-verification | NO |
-| codex | REQUEST_CHANGES (blocking) | Fix in one batch + commit + re-run critics + new `--review` → `--review-complete`. **Repeat until APPROVED.** | NO |
+| codex | REQUEST_CHANGES (blocking) | Fix in one batch + commit + re-run critics + new `--review` → `--review-complete`. **Repeat until APPROVED.** Escalate per § Escalation criteria if circular. | NO |
 | codex | REQUEST_CHANGES (non-blocking) | Record and proceed to /pre-pr-verification | NO |
-| codex | REQUEST_CHANGES with out-of-scope findings | Dismiss with rationale in dispute context file → re-review. If Codex still disagrees, debate via `--prompt` with evidence. **Continue until Codex concedes or approves.** Escalate to user only if both agents agree human input is needed. | NO |
-| codex | NEEDS_DISCUSSION | Debate via `--prompt` with evidence-based reasoning. Codex may concede, counter-argue, or propose compromise. **Continue discussion until resolved** (one agent concedes or compromise reached). Escalate to user only if both agents agree human input is needed. | NO |
+| codex | REQUEST_CHANGES with out-of-scope findings | Dismiss with rationale in dispute context file → re-review. If Codex still disagrees, debate via `--prompt` with evidence. **Continue until Codex concedes or approves.** Escalate per § Escalation criteria if circular or security-critical. | NO |
+| codex | NEEDS_DISCUSSION | Debate via `--prompt` with evidence-based reasoning. Codex may concede, counter-argue, or propose compromise. **Continue discussion until resolved** (one agent concedes or compromise reached). Escalate per § Escalation criteria if circular or security-critical. | NO |
 | sentinel | Any findings | Paladin triages (advisory, no gating markers) | NO |
 | sentinel | Timeout | Proceed with Codex findings only | NO |
 | /pre-pr-verification | Pass/Fail | PR / fix | NO |
