@@ -11,6 +11,7 @@
 set -e
 
 source "$(dirname "$0")/lib/evidence.sh"
+source "$(dirname "$0")/lib/review-metrics.sh"
 
 hook_input=$(cat)
 
@@ -61,13 +62,102 @@ log_evidence() { echo "$ts | codex-trace | $1 | $session_id" >> "$HOME/.claude/l
 # --review-complete emits both CODEX_REVIEW_RAN and CODEX APPROVED when findings
 # contain VERDICT: APPROVED. The CODEX_REVIEW_RAN sentinel proves the review
 # actually completed (findings file exists). We require it before writing approval.
+codex_verdict=""
 if echo "$response" | grep -qx "CODEX APPROVED"; then
+  codex_verdict="APPROVED"
   if echo "$response" | grep -qx "CODEX_REVIEW_RAN"; then
     append_evidence "$session_id" "codex" "APPROVED" "$cwd"
     log_evidence "CODEX_APPROVED"
   else
     echo "BLOCKED: CODEX APPROVED without CODEX_REVIEW_RAN sentinel — review may not have completed" >&2
     log_evidence "CODEX_APPROVE_BLOCKED:no_review_ran"
+  fi
+elif echo "$response" | grep -qx "CODEX REQUEST_CHANGES"; then
+  codex_verdict="REQUEST_CHANGES"
+elif echo "$response" | grep -qx "CODEX VERDICT_MISSING"; then
+  codex_verdict="VERDICT_MISSING"
+fi
+
+# --- Review metrics: extract finding details from Codex findings file ---
+if echo "$response" | grep -qx "CODEX_REVIEW_RAN" && [ -n "$codex_verdict" ]; then
+  # Extract findings file path from the --review-complete command
+  findings_file=$(echo "$command" | grep -oE '[^ ]+\.(toon|findings)[^ ]*' | head -1)
+  diff_hash=$(compute_diff_hash "$cwd")
+
+  if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
+    # Parse canonical TOON format: header "findings[N]{fields}:" + indented CSV rows
+    # Extract field order from the header line
+    header=$(grep -E '^findings\[[0-9]+\]' "$findings_file" 2>/dev/null | head -1 || true)
+    # Count data rows (indented lines after header, before summary/stats)
+    total_findings=$(sed -n '/^findings\[/,/^[^ ]/{ /^  /p; }' "$findings_file" 2>/dev/null | wc -l | tr -d ' ')
+    total_findings=${total_findings:-0}
+
+    # Parse field positions from header: findings[N]{id,file,line,severity,...}:
+    field_list=""
+    if [ -n "$header" ]; then
+      field_list=$(echo "$header" | sed 's/^findings\[[0-9]*\]{\(.*\)}:$/\1/')
+    fi
+
+    # Find severity field position (1-indexed)
+    sev_pos=0
+    if [ -n "$field_list" ]; then
+      idx=0
+      IFS=',' read -ra hfields <<< "$field_list"
+      for f in "${hfields[@]}"; do
+        idx=$((idx + 1))
+        if [ "$f" = "severity" ]; then sev_pos=$idx; break; fi
+      done
+    fi
+
+    # Parse individual finding rows
+    blocking_findings=0
+    finding_idx=0
+    while IFS= read -r row; do
+      row=$(echo "$row" | sed 's/^  *//')  # strip leading indent
+      [ -z "$row" ] && continue
+      finding_idx=$((finding_idx + 1))
+      fid="codex-${finding_idx}"
+
+      # Extract fields by position using CSV-aware parsing
+      # Fields may be quoted: F1,src/app.ts,10,blocking,correctness,"desc with, commas","suggestion"
+      IFS=',' read -ra parts <<< "$row"
+      f_file="" ; f_line="" ; f_severity="" ; f_category="" ; f_desc=""
+      if [ -n "$field_list" ]; then
+        fidx=0
+        IFS=',' read -ra hfields <<< "$field_list"
+        for fn in "${hfields[@]}"; do
+          fidx=$((fidx + 1))
+          val="${parts[$((fidx - 1))]:-}"
+          val=$(echo "$val" | sed 's/^"//;s/"$//')  # strip quotes
+          case "$fn" in
+            file) f_file="$val" ;;
+            line) f_line="$val" ;;
+            severity) f_severity="$val" ;;
+            category) f_category="$val" ;;
+            description) f_desc="$val" ;;
+          esac
+        done
+      fi
+
+      # Normalize severity
+      case "$f_severity" in
+        critical|high|blocking) f_severity="blocking"; blocking_findings=$((blocking_findings + 1)) ;;
+        medium|low|"") f_severity="non-blocking" ;;
+        *) f_severity="advisory" ;;
+      esac
+      record_finding_raised "$session_id" "codex" "$fid" "$f_severity" \
+        "${f_category:-other}" "${f_file:-}" "${f_line:-}" "${f_desc:-}" "$diff_hash"
+    done < <(sed -n '/^findings\[/,/^[^ ]/{ /^  /p; }' "$findings_file" 2>/dev/null || true)
+
+    non_blocking_findings=$((total_findings - blocking_findings))
+    [ "$non_blocking_findings" -lt 0 ] && non_blocking_findings=0
+
+    # Always record a summary even if individual parsing got nothing
+    record_findings_summary "$session_id" "codex" "$diff_hash" "$codex_verdict" \
+      "$total_findings" "$blocking_findings" "$non_blocking_findings"
+  else
+    # No findings file accessible — record summary from verdict alone
+    record_findings_summary "$session_id" "codex" "$diff_hash" "$codex_verdict" "0" "0" "0"
   fi
 fi
 
