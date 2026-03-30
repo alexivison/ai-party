@@ -83,8 +83,10 @@ func (a *liveTrackerActions) Stop(ctx context.Context, masterID, workerID string
 	// Kill via run-shell (tmux server context) to avoid socket issues from go run.
 	cmd := fmt.Sprintf("tmux kill-session -t %s 2>/dev/null; true", workerID)
 	if err := a.tmuxClient.RunShell(ctx, workerID, cmd); err != nil {
-		// Fallback: try direct kill if run-shell fails (session might already be dead)
-		_, _ = a.sessionSvc.Stop(ctx, workerID)
+		// Fallback: try direct kill if run-shell fails (session might already be dead).
+		if _, stopErr := a.sessionSvc.Stop(ctx, workerID); stopErr != nil {
+			return fmt.Errorf("stop %s: %w", workerID, stopErr)
+		}
 	} else if !isGhost {
 		// Deregister when manifest exists (or has a parse/IO error) —
 		// Deregister tolerates missing files and still cleans up runtime dir.
