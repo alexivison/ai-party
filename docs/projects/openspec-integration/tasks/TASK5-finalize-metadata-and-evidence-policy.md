@@ -14,7 +14,7 @@ Close the remaining policy gaps after the unified input-shape design works. This
 - Decide whether Track 1's stock `tasks.md` usage is sufficient or whether an optional metadata extension is warranted
 - Decide and codify the `openspec/**/*.md` diff-hash policy
 - Extend regression tests and workflow docs around the unified input-shape design
-- Document the final operator rules for feature planning, bugfixes, and quick fixes
+- Document the final operator rules for feature planning, bugfixes, and quick fixes, including that OpenSpec `party-dispatch` support remains a follow-up
 
 **Out of scope (handled by other tasks):**
 - Reworking the core execution sequence
@@ -66,7 +66,7 @@ N/A (non-UI task)
 **Functionality:**
 - The harness has an explicit yes/no rule for whether OpenSpec Markdown edits affect diff-hash gating
 - If optional task metadata is introduced, stock OpenSpec files still parse and execute correctly
-- Docs state which workflow to use for OpenSpec feature work, classic feature work, bugfixes, and quick fixes without invoking repo detection
+- Docs state which workflow to use for OpenSpec feature work, classic feature work, bugfixes, and quick fixes without invoking repo detection, and they note that OpenSpec worker dispatch is not part of Track 1
 - Regression tests cover planning-only Markdown changes and mixed code-plus-OpenSpec changes
 
 **Key gotchas:**
