@@ -52,21 +52,41 @@ var _ Runner = ExecRunner{}
 
 // ExitError indicates a tmux command ran but exited with a non-zero status.
 // This distinguishes "tmux ran but failed" from "tmux binary not found".
+// Stderr is captured so callers can distinguish "session not found" from
+// transport errors (connection refused, no server running, etc.).
 type ExitError struct {
-	Code int
+	Code   int
+	Stderr string
 }
 
-func (e *ExitError) Error() string { return fmt.Sprintf("tmux exited with status %d", e.Code) }
+func (e *ExitError) Error() string {
+	if e.Stderr != "" {
+		return fmt.Sprintf("tmux exited with status %d: %s", e.Code, e.Stderr)
+	}
+	return fmt.Sprintf("tmux exited with status %d", e.Code)
+}
+
+// IsConnectionError returns true if the error indicates a tmux server
+// transport failure rather than a command-level error (e.g. "session not found").
+func (e *ExitError) IsConnectionError() bool {
+	return strings.Contains(e.Stderr, "error connecting") ||
+		strings.Contains(e.Stderr, "no server running") ||
+		strings.Contains(e.Stderr, "lost server")
+}
 
 // Run executes a tmux command and returns its trimmed stdout.
-// Wraps non-zero exits as *ExitError so callers can distinguish from missing-binary errors.
+// Wraps non-zero exits as *ExitError (with stderr) so callers can distinguish
+// "session not found" from transport errors.
 func (ExecRunner) Run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "tmux", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return "", &ExitError{Code: exitErr.ExitCode()}
+			return "", &ExitError{
+				Code:   exitErr.ExitCode(),
+				Stderr: strings.TrimRight(string(exitErr.Stderr), "\n"),
+			}
 		}
 		return "", err
 	}
@@ -82,7 +102,10 @@ func (ExecRunner) RunWithoutEnv(ctx context.Context, excludeKey string, args ...
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return "", &ExitError{Code: exitErr.ExitCode()}
+			return "", &ExitError{
+				Code:   exitErr.ExitCode(),
+				Stderr: strings.TrimRight(string(exitErr.Stderr), "\n"),
+			}
 		}
 		return "", err
 	}

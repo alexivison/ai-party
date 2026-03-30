@@ -67,7 +67,7 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 	if opts.Master {
 		m.SessionType = "master"
 	}
-	sessionID, err := s.claimSessionID(m)
+	sessionID, err := s.claimSessionID(ctx, m)
 	if err != nil {
 		return StartResult{}, err
 	}
@@ -127,10 +127,10 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 }
 
 // claimSessionID generates a unique session ID and atomically creates its
-// manifest via Store.Create (flock-protected). If the base ID's manifest
-// already exists, retries with random suffixes. The template's PartyID is
-// overwritten with each candidate ID.
-func (s *Service) claimSessionID(template state.Manifest) (string, error) {
+// manifest via Store.Create (flock-protected). Also rejects IDs that already
+// exist as tmux sessions (orphan sessions without manifests). The template's
+// PartyID is overwritten with each candidate ID.
+func (s *Service) claimSessionID(ctx context.Context, template state.Manifest) (string, error) {
 	const maxAttempts = 100
 	for attempt := range maxAttempts {
 		var id string
@@ -141,13 +141,20 @@ func (s *Service) claimSessionID(template state.Manifest) (string, error) {
 		}
 
 		template.PartyID = id
-		err := s.Store.Create(template)
-		if err == nil {
-			return id, nil
-		}
-		if !errors.Is(err, state.ErrManifestExists) {
+		if err := s.Store.Create(template); err != nil {
+			if errors.Is(err, state.ErrManifestExists) {
+				continue
+			}
 			return "", fmt.Errorf("create manifest: %w", err)
 		}
+
+		// Guard against orphan tmux sessions that have no manifest.
+		if exists, _ := s.Client.HasSession(ctx, id); exists {
+			_ = s.Store.Delete(id)
+			continue
+		}
+
+		return id, nil
 	}
 	return "", fmt.Errorf("failed to generate unique session ID after %d attempts", maxAttempts)
 }

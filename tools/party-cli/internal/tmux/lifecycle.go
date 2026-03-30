@@ -8,11 +8,13 @@ import (
 )
 
 // HasSession returns true if the named tmux session exists.
+// Returns (false, nil) for genuine "session not found" and (false, error) for
+// transport failures (connection refused, no server running, etc.).
 func (c *Client) HasSession(ctx context.Context, sessionID string) (bool, error) {
 	_, err := c.runner.Run(ctx, "has-session", "-t", sessionID)
 	if err != nil {
 		var exitErr *ExitError
-		if errors.As(err, &exitErr) {
+		if errors.As(err, &exitErr) && !exitErr.IsConnectionError() {
 			return false, nil
 		}
 		return false, fmt.Errorf("has-session %s: %w", sessionID, err)

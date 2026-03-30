@@ -1285,7 +1285,7 @@ func TestClaimSessionID_Unique(t *testing.T) {
 	svc, _ := setupService(t)
 	svc.Now = func() int64 { return 42 }
 
-	id, err := svc.claimSessionID(state.Manifest{Title: "test", Cwd: "/tmp"})
+	id, err := svc.claimSessionID(t.Context(), state.Manifest{Title: "test", Cwd: "/tmp"})
 	if err != nil {
 		t.Fatalf("claimSessionID: %v", err)
 	}
@@ -1305,7 +1305,7 @@ func TestClaimSessionID_Collision(t *testing.T) {
 		t.Fatalf("create collision manifest: %v", err)
 	}
 
-	id, err := svc.claimSessionID(state.Manifest{Title: "test", Cwd: "/tmp"})
+	id, err := svc.claimSessionID(t.Context(), state.Manifest{Title: "test", Cwd: "/tmp"})
 	if err != nil {
 		t.Fatalf("claimSessionID: %v", err)
 	}

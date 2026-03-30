@@ -5,7 +5,6 @@ package message
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -570,10 +569,11 @@ func TestWorkers_TmuxErrorNotMaskedAsStopped(t *testing.T) {
 	createManifest(t, store, "party-master", "master", "master")
 	createWorkerManifest(t, store, "party-w1", "party-master")
 
-	// HasSession returns a transport error (NOT ExitError).
+	// HasSession returns an ExitError with connection-error stderr,
+	// matching real tmux behavior (e.g. dead socket).
 	runner := &mockRunner{fn: func(_ context.Context, args ...string) (string, error) {
 		if len(args) >= 1 && args[0] == "has-session" {
-			return "", errors.New("connection refused")
+			return "", &tmux.ExitError{Code: 1, Stderr: "error connecting to /tmp/tmux-501/default (No such file or directory)"}
 		}
 		return "", nil
 	}}
@@ -607,7 +607,7 @@ func TestBroadcast_TmuxTransportError(t *testing.T) {
 
 	runner := &mockRunner{fn: func(_ context.Context, args ...string) (string, error) {
 		if len(args) >= 1 && args[0] == "has-session" {
-			return "", errors.New("connection refused")
+			return "", &tmux.ExitError{Code: 1, Stderr: "error connecting to /tmp/tmux-501/default (No such file or directory)"}
 		}
 		return "", nil
 	}}

@@ -62,6 +62,22 @@ func TestHasSession_Error(t *testing.T) {
 	}
 }
 
+func TestHasSession_ConnectionError(t *testing.T) {
+	t.Parallel()
+
+	// ExitError with connection-error stderr should propagate as error,
+	// NOT be treated as "session not found".
+	m := newMock(func(_ context.Context, _ ...string) (string, error) {
+		return "", &ExitError{Code: 1, Stderr: "error connecting to /tmp/tmux-501/default (No such file or directory)"}
+	})
+	c := NewClient(m)
+
+	_, err := c.HasSession(t.Context(), "party-x")
+	if err == nil {
+		t.Fatal("expected error for connection failure, got nil")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // EnsureSessionRunning
 // ---------------------------------------------------------------------------
