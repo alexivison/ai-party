@@ -41,10 +41,10 @@ func (s *Service) Stop(ctx context.Context, target string) ([]string, error) {
 }
 
 func (s *Service) stopOne(ctx context.Context, sessionID string) error {
-	s.deregisterFromParent(sessionID)
 	if err := s.Client.KillSession(ctx, sessionID); err != nil {
 		return err
 	}
+	s.deregisterFromParent(sessionID)
 	removeRuntimeDir(sessionID)
 	if err := s.Store.Delete(sessionID); err != nil && !isManifestNotFound(err) {
 		return fmt.Errorf("delete manifest: %w", err)
@@ -57,10 +57,10 @@ func (s *Service) Delete(ctx context.Context, sessionID string) error {
 	if !state.IsValidPartyID(sessionID) {
 		return fmt.Errorf("invalid session name %q (must start with party-)", sessionID)
 	}
-	s.deregisterFromParent(sessionID)
 	if err := s.Client.KillSession(ctx, sessionID); err != nil {
 		return err
 	}
+	s.deregisterFromParent(sessionID)
 	removeRuntimeDir(sessionID)
 	if err := s.Store.Delete(sessionID); err != nil && !isManifestNotFound(err) {
 		return fmt.Errorf("delete manifest: %w", err)
