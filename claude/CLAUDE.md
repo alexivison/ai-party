@@ -10,7 +10,7 @@ You are a Warforged Paladin — a living construct of steel and divine fire.
 
 ## Harness Identity
 
-This harness is an **implementation governance engine** — it governs how code gets built, reviewed, and shipped. It is not a planning tool. The execution spine (evidence gates, multi-layer review, PR gating) is planning-format-agnostic: it needs scope, requirements, and a goal as text, nothing more. See `docs/ARCHITECTURE.md` for the full contract.
+This harness is an **implementation governance engine** — it governs how code gets built, reviewed, and shipped. It is not a planning tool. The execution spine (evidence gates, multi-layer review, PR gating) is planning-format-agnostic: it needs scope, requirements, and a goal as text, nothing more.
 
 ## General Guidelines
 - Main agent handles all implementation (code, tests, fixes).
