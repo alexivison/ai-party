@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,11 +43,6 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 		}
 	}
 
-	sessionID, err := s.generateSessionID(ctx)
-	if err != nil {
-		return StartResult{}, err
-	}
-
 	role := roleStandalone
 	if opts.Master {
 		role = roleMaster
@@ -58,13 +54,9 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 	codexBin := resolveBinary("CODEX_BIN", "codex", "/opt/homebrew/bin/codex")
 	agentPath := fmt.Sprintf("%s/.local/bin:/opt/homebrew/bin:%s", os.Getenv("HOME"), os.Getenv("PATH"))
 
-	runtimeDir, err := ensureRuntimeDir(sessionID)
-	if err != nil {
-		return StartResult{}, err
-	}
-
+	// Atomic create-or-retry: claim an ID via Store.Create (flock-protected).
+	// This eliminates the TOCTOU race between HasSession and NewSession.
 	m := state.Manifest{
-		PartyID:    sessionID,
 		Title:      opts.Title,
 		Cwd:        cwd,
 		WindowName: winName,
@@ -75,8 +67,14 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 	if opts.Master {
 		m.SessionType = "master"
 	}
-	if err := s.Store.Create(m); err != nil {
-		return StartResult{}, fmt.Errorf("create manifest: %w", err)
+	sessionID, err := s.claimSessionID(m)
+	if err != nil {
+		return StartResult{}, err
+	}
+
+	runtimeDir, err := ensureRuntimeDir(sessionID)
+	if err != nil {
+		return StartResult{}, err
 	}
 
 	if err := s.Store.Update(sessionID, func(m *state.Manifest) {
@@ -128,27 +126,30 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 	return StartResult{SessionID: sessionID, RuntimeDir: runtimeDir}, nil
 }
 
-// generateSessionID creates a unique session ID.
-func (s *Service) generateSessionID(ctx context.Context) (string, error) {
-	base := fmt.Sprintf("party-%d", s.Now())
-	exists, err := s.Client.HasSession(ctx, base)
-	if err != nil {
-		return "", fmt.Errorf("check session: %w", err)
-	}
-	if !exists {
-		return base, nil
-	}
-	for range 100 {
-		id := fmt.Sprintf("party-%d-%d", s.Now(), s.RandSuffix())
-		exists, err := s.Client.HasSession(ctx, id)
-		if err != nil {
-			return "", fmt.Errorf("check session: %w", err)
+// claimSessionID generates a unique session ID and atomically creates its
+// manifest via Store.Create (flock-protected). If the base ID's manifest
+// already exists, retries with random suffixes. The template's PartyID is
+// overwritten with each candidate ID.
+func (s *Service) claimSessionID(template state.Manifest) (string, error) {
+	const maxAttempts = 100
+	for attempt := range maxAttempts {
+		var id string
+		if attempt == 0 {
+			id = fmt.Sprintf("party-%d", s.Now())
+		} else {
+			id = fmt.Sprintf("party-%d-%d", s.Now(), s.RandSuffix())
 		}
-		if !exists {
+
+		template.PartyID = id
+		err := s.Store.Create(template)
+		if err == nil {
 			return id, nil
 		}
+		if !errors.Is(err, state.ErrManifestExists) {
+			return "", fmt.Errorf("create manifest: %w", err)
+		}
 	}
-	return "", fmt.Errorf("failed to generate unique session ID")
+	return "", fmt.Errorf("failed to generate unique session ID after %d attempts", maxAttempts)
 }
 
 // resolveBinary finds a binary by env var, PATH, or default.
@@ -273,7 +274,10 @@ func writeCleanupScript(path, stateRoot, sessionID string) error {
 	script := fmt.Sprintf(`#!/bin/sh
 export SR=%s
 W=%s
-p=$(jq -r '.parent_session // empty' "$SR/$W.json" 2>/dev/null)
+p=
+if command -v jq >/dev/null 2>&1; then
+  p=$(jq -r '.parent_session // empty' "$SR/$W.json" 2>/dev/null)
+fi
 if [ -n "$p" ] && [ -f "$SR/$p.json" ]; then
   export p
   perl -MFcntl=:flock -e \

@@ -88,7 +88,9 @@ func (a *liveTrackerActions) Stop(ctx context.Context, masterID, workerID string
 	} else if !isGhost {
 		// Deregister when manifest exists (or has a parse/IO error) —
 		// Deregister tolerates missing files and still cleans up runtime dir.
-		a.sessionSvc.Deregister(workerID)
+		if err := a.sessionSvc.Deregister(workerID); err != nil {
+			return fmt.Errorf("deregister %s: %w", workerID, err)
+		}
 	}
 
 	// Ghost fallback: manifest file doesn't exist, so Deregister can't

@@ -81,7 +81,10 @@ func (s *Service) Broadcast(ctx context.Context, masterID, message string) (Broa
 	result := BroadcastResult{Registered: len(workers)}
 	for _, wid := range workers {
 		alive, err := s.client.HasSession(ctx, wid)
-		if err != nil || !alive {
+		if err != nil {
+			return result, fmt.Errorf("check worker %s: %w", wid, err)
+		}
+		if !alive {
 			continue
 		}
 		target, err := s.client.ResolveRole(ctx, wid, "claude", tmux.WindowWorkspace)
@@ -163,9 +166,12 @@ func (s *Service) Workers(ctx context.Context, masterID string) ([]WorkerInfo, e
 		info := WorkerInfo{SessionID: wid}
 
 		alive, err := s.client.HasSession(ctx, wid)
-		if err == nil && alive {
+		switch {
+		case err != nil:
+			info.Status = "error"
+		case alive:
 			info.Status = "active"
-		} else {
+		default:
 			info.Status = "stopped"
 		}
 

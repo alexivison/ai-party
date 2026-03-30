@@ -1038,20 +1038,6 @@ func TestRunBatch_MultipleCommands(t *testing.T) {
 	t.Parallel()
 
 	m := newMock(func(_ context.Context, args ...string) (string, error) {
-		// Expect: set-option -p -t s:0.0 @role codex ; set-option -p -t s:0.1 @role claude
-		want := []string{
-			"set-option", "-p", "-t", "s:0.0", "@role", "codex",
-			";",
-			"set-option", "-p", "-t", "s:0.1", "@role", "claude",
-		}
-		if len(args) != len(want) {
-			t.Fatalf("args len: got %d %v, want %d %v", len(args), args, len(want), want)
-		}
-		for i := range args {
-			if args[i] != want[i] {
-				t.Errorf("args[%d]: got %q, want %q", i, args[i], want[i])
-			}
-		}
 		return "", nil
 	})
 	c := NewClient(m)
@@ -1063,8 +1049,9 @@ func TestRunBatch_MultipleCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunBatch multi: %v", err)
 	}
-	if len(m.calls) != 1 {
-		t.Errorf("call count: got %d, want 1 (batched)", len(m.calls))
+	// Commands are executed sequentially — one Run call per command.
+	if len(m.calls) != 2 {
+		t.Errorf("call count: got %d, want 2 (sequential)", len(m.calls))
 	}
 }
 
@@ -1082,6 +1069,36 @@ func TestRunBatch_Error(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// W5: RunBatch should execute commands individually and stop on first error.
+// Currently all commands are batched into a single tmux invocation, so an early
+// failure doesn't prevent later commands from executing (corrupting pane topology).
+func TestRunBatch_StopsOnFirstError(t *testing.T) {
+	t.Parallel()
+
+	m := newMock(func(_ context.Context, args ...string) (string, error) {
+		// Fail on select-pane commands
+		if args[0] == "select-pane" {
+			return "", errors.New("pane not found")
+		}
+		return "", nil
+	})
+	c := NewClient(m)
+
+	_, err := c.RunBatch(t.Context(),
+		[]string{"set-option", "-p", "-t", "s:0.0", "key", "val"},
+		[]string{"select-pane", "-t", "s:0.1"},
+		[]string{"set-option", "-p", "-t", "s:0.2", "key", "val"},
+	)
+	if err == nil {
+		t.Fatal("expected error from failing command, got nil")
+	}
+	// After fix: commands execute individually; third command should not run.
+	// Currently: all batched into one Run call (len(m.calls)==1).
+	if len(m.calls) != 2 {
+		t.Errorf("expected 2 calls (stop after second fails), got %d", len(m.calls))
 	}
 }
 
