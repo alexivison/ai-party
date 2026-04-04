@@ -1,63 +1,15 @@
 #!/bin/bash
-# ai-config uninstaller
-# Removes symlinks created by install.sh (does not remove the repo)
-
+# uninstall.sh — Backward-compatibility shim. Delegates to party-cli uninstall.
 set -e
 
+if command -v party-cli &>/dev/null; then
+  exec party-cli uninstall "$@"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLS=("claude" "codex")
+if command -v go &>/dev/null && [[ -f "$SCRIPT_DIR/tools/party-cli/main.go" ]]; then
+  exec env "PARTY_REPO_ROOT=$SCRIPT_DIR" go -C "$SCRIPT_DIR/tools/party-cli" run . uninstall "$@"
+fi
 
-echo "ai-config uninstaller"
-echo "====================="
-echo ""
-
-remove_symlink() {
-    local tool="$1"
-    local source="$SCRIPT_DIR/$tool"
-    local target="$HOME/.$tool"
-
-    if [[ ! -L "$target" ]]; then
-        echo "⏭  Skipping ~/.$tool (not a symlink)"
-        return
-    fi
-
-    if [[ "$(readlink "$target")" != "$source" ]]; then
-        echo "⏭  Skipping ~/.$tool (points elsewhere: $(readlink "$target"))"
-        return
-    fi
-
-    rm "$target"
-    echo "✓  Removed symlink: ~/.$tool"
-}
-
-remove_file_symlink() {
-    local source="$1"
-    local target="$2"
-    local label="$3"
-
-    if [[ ! -L "$target" ]]; then
-        echo "⏭  Skipping $label (not a symlink)"
-        return
-    fi
-
-    if [[ "$(readlink "$target")" != "$source" ]]; then
-        echo "⏭  Skipping $label (points elsewhere: $(readlink "$target"))"
-        return
-    fi
-
-    rm "$target"
-    echo "✓  Removed symlink: $label"
-}
-
-echo "Removing symlinks..."
-echo ""
-
-for tool in "${TOOLS[@]}"; do
-    remove_symlink "$tool"
-done
-
-remove_file_symlink "$SCRIPT_DIR/tmux/tmux.conf" "$HOME/.tmux.conf" "~/.tmux.conf"
-
-echo ""
-echo "Uninstall complete!"
-echo "The ai-config repo remains at: $SCRIPT_DIR"
+echo "Error: party-cli not found. Build with: cd tools/party-cli && go install ." >&2
+exit 1

@@ -45,7 +45,7 @@ Out-of-scope touches without justification are blocking and require `NEEDS_DISCU
 
 Evidence is stored in a per-session JSONL log (`/tmp/claude-evidence-{session_id}.jsonl`). Each entry records a `diff_hash` — SHA-256 of the branch diff from merge-base. Gate hooks compute the current diff_hash and only accept evidence with a matching hash. Editing code after approval automatically invalidates prior evidence (different hash) — no invalidation hook needed.
 
-`codex-gate.sh` only blocks `tmux-codex.sh --approve` (self-approval). All other Codex commands (`--review`, `--prompt`, `--plan-review`, `--review-complete`) pass through freely. Workflow skills are responsible for running critics before dispatching Codex review. `--approve` is hard-blocked; approval flows through `--review-complete` reading the verdict Codex wrote.
+`codex-gate.sh` only blocks `party-cli transport approve` (self-approval). All other transport commands (`review`, `prompt`, `plan-review`, `review-complete`) pass through freely. Workflow skills are responsible for running critics before dispatching Codex review. `--approve` is hard-blocked; approval flows through `--review-complete` reading the verdict Codex wrote.
 
 `agent-trace-stop.sh` tracks all critic verdicts (APPROVED and REQUEST_CHANGES) via `{type}-run` evidence entries and detects oscillation in two modes:
 - **Same-hash alternation** (all critics including scribe): when 3 alternating verdicts are detected at the same hash (e.g., RC→A→RC), an auto-triage-override is recorded.
