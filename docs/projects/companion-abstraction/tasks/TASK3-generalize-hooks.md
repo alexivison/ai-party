@@ -50,7 +50,7 @@ Rename and parameterize the three Codex-specific hooks (`codex-gate.sh`, `wizard
 - `companion-gate.sh`: Match `party-cli transport` commands (same as current). Extract companion name from `--to <name>` flag if present (default: "wizard"). Block `approve` subcommand for any companion. Allow all other modes.
 - `companion-guard.sh`: Block direct tmux commands targeting any companion pane. Resolve companion roles dynamically via `party-cli companion query roles` (provided by Task 1) instead of hardcoded "codex" / "Wizard" regex. Still fail-open on parse errors (e.g., if `party-cli` not found).
 - `companion-trace.sh`: After a successful `party-cli transport` command, record evidence using the companion name extracted from `--to` flag (e.g., `append_evidence "$session_id" "wizard" "APPROVED" "$cwd"`). Sentinel detection generalized: companion adapter outputs standardized markers.
-- `pr-gate.sh`: Call `party-cli companion query evidence-required` (provided by Task 1) to get the required evidence list. If not set in `.party.toml`, the query subcommand returns defaults with companion name(s) substituted. Quick-tier evidence list unchanged.
+- `pr-gate.sh`: Call `party-cli companion query evidence-required` (provided by Task 1) to get the required evidence list. If not set in `.party.toml`, the query subcommand returns defaults with companion name(s) substituted. Quick-tier evidence list unchanged. **No-companion degradation:** when `party-cli companion query names` returns empty (no companions configured or all CLIs missing), `evidence-required` omits companion evidence types entirely — PR gate must not block on companion evidence when no companion is available.
 - Redirect stubs: Old filenames source the new file and pass through. One-liners.
 
 **Key gotchas:**
@@ -67,6 +67,7 @@ Rename and parameterize the three Codex-specific hooks (`codex-gate.sh`, `wizard
 - `companion-trace.sh` records evidence with companion name as type
 - `pr-gate.sh` with `.party.toml` `[evidence].required` uses custom list
 - `pr-gate.sh` without `.party.toml` uses default with companion name substituted
+- `pr-gate.sh` with no companions available → companion evidence types omitted from required list → PR gate passes without companion evidence
 - Redirect stubs correctly delegate to new files
 
 ## Acceptance Criteria
@@ -78,3 +79,4 @@ Rename and parameterize the three Codex-specific hooks (`codex-gate.sh`, `wizard
 - [ ] `companion-trace.sh` records evidence using companion name
 - [ ] `pr-gate.sh` reads evidence requirements from `.party.toml`
 - [ ] `pr-gate.sh` falls back to defaults when no config exists
+- [ ] `pr-gate.sh` omits companion evidence when no companions are available (graceful degradation)

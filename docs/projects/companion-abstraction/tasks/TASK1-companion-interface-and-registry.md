@@ -55,7 +55,7 @@ Files to study before implementing (on the PR #119 branch):
 - Codex `Companion` implementation that returns `Name()="wizard"`, `CLI()="codex"`, `Role()="analyzer"`, `Capabilities()=["review","plan","prompt"]`
 - Codex `ParseCompletion()` extracts completion from the hardcoded prefixes currently in `notify.go` (`"Review complete. Findings at: "`, etc.)
 - Default config (no `.party.toml`) produces a registry with one companion: wizard/codex
-- `party-cli companion query` subcommand with three modes: `roles` (list companion roles), `names` (list companion names), `evidence-required` (list required evidence types). Output is newline-delimited plain text. This is the bridge for shell hooks that cannot import Go — Task 3 hooks consume this.
+- `party-cli companion query` subcommand with three modes: `roles` (list companion roles), `names` (list companion names), `evidence-required` (list required evidence types). Output is newline-delimited plain text. This is the bridge for shell hooks that cannot import Go — Task 3 hooks consume this. **No-companion case:** when registry is empty (no companions configured or all CLIs missing), `evidence-required` returns the default list with companion evidence types omitted.
 
 **Key gotchas:**
 - The `Start()` method signature must account for thread resumption (Codex uses `CODEX_THREAD_ID` env var)

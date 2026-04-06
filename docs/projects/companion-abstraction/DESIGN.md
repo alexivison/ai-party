@@ -73,6 +73,8 @@ tools/party-cli/
 │   │   └── template.go           # Modify — companion-scoped template paths
 │   ├── state/
 │   │   └── manifest.go           # Modify — Companions array
+│   ├── tui/
+│   │   └── sidebar_status.go     # Modify — read companion-status-<name>.json
 │   └── tmux/
 │       └── query.go              # No change — ResolveRole() already generic
 ├── cmd/
@@ -268,6 +270,7 @@ This subcommand is created in **Task 1** (alongside the registry) and consumed b
 | PostToolUse trace | `codex-trace.sh` records evidence type "codex" | `companion-trace.sh` records evidence type = companion name |
 | PR gate | `pr-gate.sh` hardcodes `REQUIRED="... codex ..."` | Calls `party-cli companion query evidence-required`; falls back to default with companion name |
 | Install | `party-cli install` hardcodes Codex setup | Iterates registered companions for CLI checks and auth |
+| TUI sidebar | `sidebar_status.go` reads `codex-status.json` | Read `companion-status-<name>.json`; iterate companions or scan for status files |
 | Permissions | `Bash(party-cli:*)` in settings.json | No change needed — already covers `party-cli transport --to ...` |
 
 ## Design Decisions
@@ -276,7 +279,7 @@ This subcommand is created in **Task 1** (alongside the registry) and consumed b
 |----------|-----------|-------------------------|
 | Go `Companion` interface (not shell adapters) | PR #119 already moved transport to Go; shell adapters would re-introduce the shell layer we just removed | Shell adapter scripts (rejected: contradicts #119 direction) |
 | `.party.toml` parsed in Go, exposed via `party-cli companion query` | `party-cli` owns config; hooks call query subcommand instead of parsing TOML in shell | Shell TOML parsing (rejected: #119 removes shell scripts; fragile and duplicates logic) |
-| Interface with concrete types (not plugin system) | New companions are added as Go files + rebuild; simpler than plugin loading | Go plugin system (rejected: fragile, platform-dependent) |
+| Interface with concrete types (not plugin system) | New companions are added as Go files + rebuild; simpler than plugin loading. Config selects which registered adapter is active — `.party.toml` controls *selection*, not *definition*. Adding a companion with novel completion parsing requires a Go adapter. | Go plugin system (rejected: fragile, platform-dependent); fully config-driven generic adapter (rejected: completion parsing is CLI-specific, can't be fully generalized without per-CLI logic) |
 | `--to <name>` on CLI command | Explicit routing is simpler and debuggable; capability routing layers on top | Capability-only routing (rejected: ambiguous when multiple companions share a capability) |
 | Default to Codex when no config | Zero-config backward compatibility; existing users don't need `.party.toml` | Require `.party.toml` (rejected: breaking change) |
 | Evidence type = companion name | `append_evidence()` already accepts arbitrary type strings; `"wizard"` instead of `"codex"` | Separate evidence namespace (rejected: unnecessary indirection) |

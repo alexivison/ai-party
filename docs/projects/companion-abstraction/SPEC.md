@@ -20,7 +20,7 @@ Make the party harness companion-agnostic: any CLI tool that can review code, cr
 | Scenario | User Action | Expected Result |
 |----------|-------------|-----------------|
 | Current setup (no change) | Run `party-cli start "task"` with no `.party.toml` | Codex launches as "wizard" in hidden window, everything works as today |
-| Swap companion | Set `companions.wizard.cli = "gemini-cli"` in `.party.toml` | Gemini CLI launches in the Wizard pane, transport routes to it |
+| Swap companion | Set `companions.wizard.cli = "gemini-cli"` in `.party.toml` | Gemini CLI launches in the Wizard pane, transport routes to it. Adding a new companion with custom completion parsing requires a Go adapter + rebuild; config alone controls which registered adapter is active. |
 | Add second companion | Add `[companions.oracle]` block to `.party.toml` | Second hidden window created, skills can address either by name |
 | Say "ask the Wizard" | Type naturally in Claude session | Claude resolves "Wizard" → active analyzer companion via CLAUDE.md mapping |
 | OpenSpec team repo | Set `specs.format = "openspec"` in `.party.toml` | Plan workflow imports/exports OpenSpec; execution core unchanged *(illustrative — OpenSpec adapter is a separate project, not built here)* |

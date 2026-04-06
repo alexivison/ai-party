@@ -33,6 +33,8 @@ Parameterize `transport.Service` so all dispatch methods accept a companion name
 - `tools/party-cli/internal/transport/template.go` — `RenderTemplate()` path resolution
 - `tools/party-cli/cmd/transport.go` — Cobra command definitions
 - `tools/party-cli/cmd/notify.go` — Completion message prefix checks
+- `tools/party-cli/internal/tui/sidebar_status.go` — Reads `codex-status.json` for TUI sidebar display
+- `tools/party-cli/internal/tui/sidebar_test.go` — Sidebar status tests
 
 ## Files to Create/Modify
 
@@ -43,6 +45,8 @@ Parameterize `transport.Service` so all dispatch methods accept a companion name
 | `tools/party-cli/internal/transport/template.go` | Modify — companion-scoped template paths |
 | `tools/party-cli/cmd/transport.go` | Modify — `--to` flag |
 | `tools/party-cli/cmd/notify.go` | Modify — `ParseCompletion()` via companion interface |
+| `tools/party-cli/internal/tui/sidebar_status.go` | Modify — read `companion-status-<name>.json` |
+| `tools/party-cli/internal/tui/sidebar_test.go` | Modify — update status filename assertions |
 | `claude/skills/codex-transport/` | Rename to `claude/skills/companion-transport/` |
 | `claude/skills/companion-transport/SKILL.md` | Modify — role-based language, `--to` flag |
 
@@ -53,6 +57,7 @@ Parameterize `transport.Service` so all dispatch methods accept a companion name
 - All six transport modes work with `--to wizard`: review, plan-review, prompt, review-complete, needs-discussion, triage-override
 - Default `--to` value: first companion with capability matching the mode (e.g., `review` mode → first companion with `"review"` capability)
 - `CompanionStatus` struct replaces `CodexStatus`; written to `companion-status-<name>.json`
+- TUI sidebar (`internal/tui/sidebar_status.go`): Update to read `companion-status-<name>.json` instead of `codex-status.json`. Iterate companion names from the registry (or scan for `companion-status-*.json` files). Update sidebar tests accordingly.
 - `notify.go`: Iterates `registry.List()`, calls `ParseCompletion()` on each to detect which companion completed
 - Template resolution: `companion-transport/templates/wizard/review.md` (falls back to `companion-transport/templates/review.md` if companion-specific template doesn't exist)
 - SKILL.md updated: all `party-cli transport` examples use `--to wizard`; "Codex" → "companion" in plumbing; persona preserved
@@ -83,3 +88,4 @@ Parameterize `transport.Service` so all dispatch methods accept a companion name
 - [ ] `notify` uses `ParseCompletion()` for companion detection
 - [ ] Skill renamed to `companion-transport` with updated SKILL.md
 - [ ] Template resolution is companion-scoped with generic fallback
+- [ ] TUI sidebar reads `companion-status-<name>.json` (not `codex-status.json`)
