@@ -46,5 +46,8 @@ IFS=$'\t' read -r model pct < "$cache_file"
 [[ -z "$pct" ]] && exit 0
 
 c=$(color_for_pct "$pct")
-printf '#[fg=#539bf5,bold]Paladin: #[fg=#768390,nobold]%s #[fg=%s,bold]%s%%#[fg=#444c56,nobold] | ' \
-    "$model" "$c" "$pct"
+# Pill-shaped segment matching SketchyBar theme
+BAR_BG="#22272e"
+PILL_BG="#343b45"
+printf '#[fg=%s,bg=%s]#[fg=#adbac7,bg=%s] Paladin: #[fg=%s,bold]%s%% #[fg=%s,bg=%s,nobold]' \
+    "$PILL_BG" "$BAR_BG" "$PILL_BG" "$c" "$pct" "$PILL_BG" "$BAR_BG"

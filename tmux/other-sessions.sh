@@ -21,8 +21,12 @@ done <<< "$all_sessions"
 [[ $party_count -eq 0 && $other_count -eq 0 ]] && exit 0
 
 output=""
-[[ $party_count -gt 0 ]] && output="#[fg=#768390]⚔ ${party_count}"
-[[ $other_count -gt 0 ]] && output="${output:+$output  }#[fg=#768390]◈ ${other_count}"
+[[ $party_count -gt 0 ]] && output="#[fg=#768390,bg=#343b45]⚔ ${party_count}"
+[[ $other_count -gt 0 ]] && output="${output:+$output  }#[fg=#768390,bg=#343b45]◈ ${other_count}"
 
 [[ -z "$output" ]] && exit 0
-printf '#[fg=#444c56] | %s ' "$output"
+# Pill-shaped segment matching SketchyBar theme
+BAR_BG="#22272e"
+PILL_BG="#343b45"
+printf '#[fg=%s,bg=%s]#[bg=%s] %s #[fg=%s,bg=%s]' \
+    "$PILL_BG" "$BAR_BG" "$PILL_BG" "$output" "$PILL_BG" "$BAR_BG"
