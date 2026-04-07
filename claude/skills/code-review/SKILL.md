@@ -27,7 +27,7 @@ Load relevant reference docs based on what's being reviewed.
 
 Locality (LoB), simplicity (KISS), and bloat (YAGNI) are the minimizer's domain. Do not duplicate that work.
 
-Severity labels (`[must]`/`[q]`/`[nit]`) and verdicts: see `claude/reference/severity-verdict.md`.
+Severity labels (`[must]`/`[q]`/`[nit]`) and verdicts: see `~/.claude/reference/severity-verdict.md`.
 
 ## Process
 

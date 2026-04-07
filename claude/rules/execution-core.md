@@ -97,7 +97,7 @@ Per-session JSONL log at `/tmp/claude-evidence-{session_id}.jsonl`. Each entry r
 
 ## Review Metrics
 
-Metrics are tracked via hooks in `~/.claude/logs/review-metrics/`. See `claude/reference/review-metrics.md` for events, CLI commands, and querying.
+Metrics are tracked via hooks in `~/.claude/logs/review-metrics/`. See `~/.claude/reference/review-metrics.md` for events, CLI commands, and querying.
 
 ## Tiered Execution
 
@@ -151,7 +151,7 @@ Classify every finding before acting:
 | /pre-pr-verification | Pass/Fail | PR / fix |
 | Edit/Write after approval | Evidence stale | Re-run cascade |
 
-**Nothing in this matrix pauses except scope violations.** Codex review is never a pause condition.
+**Codex review is never a pause condition.** See § Pause Conditions for the full list of valid pause triggers.
 
 ## Dispute Resolution
 
