@@ -110,7 +110,6 @@ After ANY user correction: identify the pattern, write a preventive rule, save t
 - Use `gh` for GitHub operations.
 - Create branches from `main`.
 - Branch naming: `<ISSUE-ID>-<kebab-case-description>`.
-- Open draft PRs unless instructed otherwise.
 - PR descriptions: follow the `pr-descriptions` skill.
 - Include issue ID in PR description (e.g., `Closes ENG-123`).
 - Create separate PRs for changes in different services.
