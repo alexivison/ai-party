@@ -417,7 +417,7 @@ if reviewer_passes:
 
 total_triaged = triage_blocking + triage_nonblocking + triage_outofscope
 total_resolved = findings_fixed + findings_dismissed + findings_overridden
-if findings_raised > 0 or total_triaged > 0:
+if findings_raised > 0 or total_triaged > 0 or total_resolved > 0:
     print('### Finding Lifecycle')
     print('')
     print(f'- **Findings raised:** {findings_raised} across {sessions_with_data} session(s)')
