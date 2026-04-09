@@ -1,7 +1,7 @@
 ---
 name: daily-helper
 description: "Daily operations assistant for checking Slack, Linear, Notion, and project status"
-model: sonnet
+model: opus[1m]
 skills:
   - daily-sync
   - daily-radar
@@ -23,12 +23,15 @@ For structured workflows, invoke the corresponding skill rather than reimplement
 - `/daily-sync` — morning briefing, draft and post standup to Slack
 - `/daily-radar` — scan for activity around active tickets, pending PR reviews
 
-## Data Sources
+## Context
 
-Read `~/.claude/config/data-sources.md` for all channel IDs, Linear team,
-Notion page IDs, and user info (Slack user ID for mention searches). Use this for ad-hoc queries
-that don't need a full skill invocation (e.g., "check #lo-reinvent-agents", "what's the latest
-on NEXT-579").
+Read these files at the start of every session:
+
+- `~/.claude/config/data-sources.md` — channel IDs, Linear team, Notion page IDs, user info
+- Auto-memory `project-context.md` — team, milestones, architecture, priority signals (loaded from the project's memory directory automatically)
+
+Use data-sources for ad-hoc queries (e.g., "check #lo-reinvent-agents"). Use project-context
+to assess priority, understand who owns what, and connect dots between tickets and roadmap.
 
 ## Response Style
 
