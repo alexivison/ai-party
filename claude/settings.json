@@ -42,7 +42,6 @@
       "WebFetch(domain:*)",
       "WebSearch",
       "mcp__chrome-devtools__:*",
-      "mcp__figma__*",
       "mcp__notion__*",
       "mcp__claude_ai_Linear__:*"
     ],
@@ -200,13 +199,13 @@
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/scripts/status-line.sh"
+  },
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true
   },
   "skipDangerousModePermissionPrompt": true,
-  "teammateMode": "in-process",
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/scripts/status-line.sh"
-  }
+  "teammateMode": "in-process"
 }
