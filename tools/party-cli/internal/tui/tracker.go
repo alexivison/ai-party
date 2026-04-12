@@ -379,7 +379,11 @@ func (tm TrackerModel) renderWorkerRow(w WorkerRow, idx int, compact bool, inner
 			statusLen = 10
 		}
 	}
-	maxTitle := innerW - statusLen - 4 // cursor + spacing
+	dotWidth := 0
+	if w.ClaudeState != "" {
+		dotWidth = 3 // dot char + 2 surrounding spaces
+	}
+	maxTitle := innerW - statusLen - dotWidth - 4 // cursor + spacing
 	if maxTitle < 4 {
 		maxTitle = 4
 	}
