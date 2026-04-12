@@ -67,8 +67,7 @@ var (
 var (
 	claudeStateActiveStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#a3be8c"))
 	claudeStateWaitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ebcb8b"))
-	claudeStateIdleStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
-	claudeStateDoneStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
+	claudeStateDimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")) // idle + done
 )
 
 // Status bar and key badge styles.

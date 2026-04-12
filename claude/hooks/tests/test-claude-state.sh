@@ -39,9 +39,6 @@ hook_input() {
 
 # Override discover_session and tmux for testing
 export PARTY_SESSION=""
-export MOCK_STATE_DIR=""
-export MOCK_SESSION_NAME=""
-export MOCK_TMUX_CALLS=""
 
 echo "--- test-claude-state.sh ---"
 

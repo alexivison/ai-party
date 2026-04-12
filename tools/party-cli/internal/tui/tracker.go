@@ -381,7 +381,7 @@ func (tm TrackerModel) renderWorkerRow(w WorkerRow, idx int, compact bool, inner
 	}
 	dotWidth := 0
 	if w.ClaudeState != "" {
-		dotWidth = 3 // dot char + 2 surrounding spaces
+		dotWidth = 2 // dot char + separator space
 	}
 	maxTitle := innerW - statusLen - dotWidth - 4 // cursor + spacing
 	if maxTitle < 4 {
@@ -411,9 +411,9 @@ func (w WorkerRow) claudeStateDot() string {
 	case "waiting":
 		return claudeStateWaitingStyle.Render(ClaudeStateDotWaiting)
 	case "idle":
-		return claudeStateIdleStyle.Render(ClaudeStateDotIdle)
+		return claudeStateDimStyle.Render(ClaudeStateDotIdle)
 	case "done":
-		return claudeStateDoneStyle.Render(ClaudeStateDotDone)
+		return claudeStateDimStyle.Render(ClaudeStateDotDone)
 	default:
 		return ""
 	}

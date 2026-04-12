@@ -25,7 +25,12 @@ case "$event" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../../session/party-lib.sh"
+LIB="$SCRIPT_DIR/../../session/party-lib.sh"
+if [[ ! -f "$LIB" ]]; then
+  echo '{}'
+  exit 0
+fi
+source "$LIB"
 
 if ! discover_session 2>/dev/null; then
   echo '{}'
