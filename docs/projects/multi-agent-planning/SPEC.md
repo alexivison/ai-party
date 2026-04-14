@@ -62,10 +62,26 @@ Complementary project. That decouples execution from TASK file format; this deco
 
 - Rewriting the execution core sequence (it's already agent-agnostic in its own terms)
 - Changing the sub-agent architecture (critic, minimizer, scribe, sentinel stay as Claude sub-agents)
+- Making the review cascade agent-agnostic (hooks, sub-agents, evidence gates, PR gate are Claude Code-specific — see Known Limitations)
 - Porting shell transport scripts to Go (that's PR #119's scope — orthogonal to this)
 - Supporting non-tmux transports (HTTP, pipe) in v1
 - Multi-companion orchestration logic (v1 uses explicit addressing; one companion per role)
 - OpenSpec adapter implementation (separate project)
+
+## Known Limitations
+
+### Review cascade only works with Claude as primary
+
+The review cascade (hooks → sub-agents → evidence → PR gate) is built on Claude Code-specific features:
+- **Hooks** (PreToolUse, PostToolUse, SessionStart, etc.) — only Claude Code supports these
+- **Sub-agents** (code-critic, minimizer, test-runner, check-runner, scribe, sentinel) — Claude Code sub-agent framework
+- **Skills** (task-workflow, codex-transport, etc.) — Claude Code SKILL.md framework
+- **Evidence system** (JSONL logs, diff-hash gating) — powered by hooks
+- **PR gate** (blocks `gh pr create` without evidence) — PreToolUse hook on Bash
+
+When a non-Claude agent is the primary (e.g., Codex), none of these mechanisms exist. The session runs in **autonomous mode** — no review cascade, no PR gating, no sub-agent critics. The companion (if configured) can still be dispatched for review via transport scripts, but nothing *enforces* the review workflow.
+
+This is an accepted trade-off for v1. Moving the cascade into party-cli as an agent-agnostic enforcement layer is a potential future project.
 
 ## Technical Reference
 

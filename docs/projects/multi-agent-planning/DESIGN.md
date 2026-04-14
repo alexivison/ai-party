@@ -379,6 +379,15 @@ Each agent provider implements `MasterPrompt() string`. The session startup pass
 
 ## Hook Generalization
 
+### Applicability
+
+Hooks are a Claude Code-specific feature. They only apply when Claude is the primary agent. When a non-Claude agent is primary (e.g., Codex), the hooks directory (`~/.claude/hooks/`) is not loaded by the agent — the hooks simply don't run. This means:
+
+- **Claude primary:** Full hook cascade — companion gate, companion trace, primary state, PR gate, worktree guard, wizard guard, agent trace, skill marker. All work as today.
+- **Non-Claude primary:** No hooks. No PR gate. No evidence enforcement. Session runs autonomously. The companion transport scripts still work (they're shell scripts invoked by the primary agent, not hooks), but nothing *enforces* their use.
+
+This is a known limitation documented in SPEC.md § Known Limitations.
+
 ### Renames
 
 | Current | New | Change |
