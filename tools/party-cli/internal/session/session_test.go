@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anthropics/ai-party/tools/party-cli/internal/agent"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/state"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/tmux"
 )
@@ -255,6 +256,20 @@ func setupService(t *testing.T) (*Service, *mockRunner) {
 	runner := newMockRunner()
 	client := tmux.NewClient(runner)
 	svc := NewService(store, client, "/fake/repo")
+	registry, err := agent.NewRegistry(&agent.Config{
+		Agents: map[string]agent.AgentConfig{
+			"claude": {CLI: "/bin/sh"},
+			"codex":  {CLI: "/bin/sh"},
+		},
+		Roles: agent.RolesConfig{
+			Primary:   &agent.RoleConfig{Agent: "claude", Window: -1},
+			Companion: &agent.RoleConfig{Agent: "codex", Window: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	svc.Registry = registry
 	svc.CLIResolver = func(_ string) (string, error) { return "echo party-cli", nil }
 	return svc, runner
 }
@@ -273,6 +288,15 @@ func createTestManifest(t *testing.T, store *state.Store, id, title, cwd, sessio
 	if err := store.Create(m); err != nil {
 		t.Fatalf("create manifest %s: %v", id, err)
 	}
+}
+
+func manifestAgentResumeID(agents []state.AgentManifest, role string) string {
+	for _, spec := range agents {
+		if spec.Role == role {
+			return spec.ResumeID
+		}
+	}
+	return ""
 }
 
 // ---------------------------------------------------------------------------
@@ -1189,80 +1213,6 @@ func TestContinue_ReRegistersWithParent(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Build command helpers
-// ---------------------------------------------------------------------------
-
-func TestBuildClaudeCmd(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]struct {
-		bin, path, resume, prompt, title string
-		master                           bool
-		wantContains                     []string
-		wantNotContains                  []string
-	}{
-		"basic": {
-			bin: "/usr/bin/claude", path: "/usr/bin", resume: "", prompt: "", title: "",
-			wantContains:    []string{"/usr/bin/claude", "--permission-mode bypassPermissions"},
-			wantNotContains: []string{"--resume", "--name", "-- ", "--effort", "--append-system-prompt"},
-		},
-		"master": {
-			bin: "/usr/bin/claude", path: "/usr/bin", resume: "", prompt: "", title: "", master: true,
-			wantContains: []string{"--effort high", "--append-system-prompt", "master session", "party-dispatch"},
-		},
-		"with resume": {
-			bin: "/usr/bin/claude", path: "/usr/bin", resume: "sess-123", prompt: "", title: "",
-			wantContains: []string{"--resume"},
-		},
-		"with title": {
-			bin: "/usr/bin/claude", path: "/usr/bin", resume: "", prompt: "", title: "my-proj",
-			wantContains: []string{"--name"},
-		},
-		"with prompt": {
-			bin: "/usr/bin/claude", path: "/usr/bin", resume: "", prompt: "fix bug", title: "",
-			wantContains: []string{"-- "},
-		},
-		"all options": {
-			bin: "/usr/bin/claude", path: "/usr/bin", resume: "r1", prompt: "do stuff", title: "proj",
-			wantContains: []string{"--resume", "--name", "-- "},
-		},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			cmd := buildClaudeCmd(tc.bin, tc.path, tc.resume, tc.prompt, tc.title, tc.master)
-			for _, s := range tc.wantContains {
-				if !strings.Contains(cmd, s) {
-					t.Errorf("expected %q in cmd: %s", s, cmd)
-				}
-			}
-			for _, s := range tc.wantNotContains {
-				if strings.Contains(cmd, s) {
-					t.Errorf("unexpected %q in cmd: %s", s, cmd)
-				}
-			}
-		})
-	}
-}
-
-func TestBuildCodexCmd(t *testing.T) {
-	t.Parallel()
-
-	cmd := buildCodexCmd("/usr/bin/codex", "/usr/bin", "")
-	if !strings.Contains(cmd, "--dangerously-bypass-approvals-and-sandbox") {
-		t.Errorf("missing bypass flag: %s", cmd)
-	}
-	if strings.Contains(cmd, "resume") {
-		t.Errorf("unexpected resume in basic cmd: %s", cmd)
-	}
-
-	cmd = buildCodexCmd("/usr/bin/codex", "/usr/bin", "thread-42")
-	if !strings.Contains(cmd, "resume") {
-		t.Errorf("expected resume in cmd: %s", cmd)
-	}
-}
-
 func TestResolveLayout(t *testing.T) {
 	// Not parallel — t.Setenv
 	t.Setenv("PARTY_LAYOUT", "sidebar")
@@ -1328,7 +1278,19 @@ func TestPersistResumeIDs(t *testing.T) {
 	svc, _ := setupService(t)
 
 	dir := t.TempDir()
-	if err := svc.persistResumeIDs("party-test", dir, "claude-id", "codex-id"); err != nil {
+	resume := map[agent.Role]resumeInfo{
+		agent.RolePrimary: {
+			agentName: "claude",
+			envVar:    "CLAUDE_SESSION_ID",
+			resumeID:  "claude-id",
+		},
+		agent.RoleCompanion: {
+			agentName: "codex",
+			envVar:    "CODEX_THREAD_ID",
+			resumeID:  "codex-id",
+		},
+	}
+	if err := svc.persistResumeIDs(dir, resume); err != nil {
 		t.Fatalf("persistResumeIDs: %v", err)
 	}
 
@@ -1354,7 +1316,7 @@ func TestPersistResumeIDs_Empty(t *testing.T) {
 	svc, _ := setupService(t)
 
 	dir := t.TempDir()
-	if err := svc.persistResumeIDs("party-test", dir, "", ""); err != nil {
+	if err := svc.persistResumeIDs(dir, map[agent.Role]resumeInfo{}); err != nil {
 		t.Fatalf("persistResumeIDs: %v", err)
 	}
 
@@ -1392,6 +1354,15 @@ func TestStart_WithResumeAndPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
+	if len(m.Agents) != 2 {
+		t.Fatalf("expected 2 manifest agents, got %+v", m.Agents)
+	}
+	if got := manifestAgentResumeID(m.Agents, "primary"); got != "claude-sess-1" {
+		t.Errorf("primary resume_id: got %q", got)
+	}
+	if got := manifestAgentResumeID(m.Agents, "companion"); got != "codex-thread-1" {
+		t.Errorf("companion resume_id: got %q", got)
+	}
 	if got := m.ExtraString("claude_session_id"); got != "claude-sess-1" {
 		t.Errorf("claude_session_id: got %q", got)
 	}
@@ -1400,6 +1371,112 @@ func TestStart_WithResumeAndPrompt(t *testing.T) {
 	}
 	if got := m.ExtraString("initial_prompt"); got != "fix the bug" {
 		t.Errorf("initial_prompt: got %q", got)
+	}
+}
+
+func TestStart_CodexPrimaryRegistry(t *testing.T) {
+	t.Parallel()
+	svc, runner := setupService(t)
+	svc.Now = func() int64 { return 7777 }
+	root := t.TempDir()
+	codexCLI := filepath.Join(root, "codex-bin")
+	claudeCLI := filepath.Join(root, "claude-bin")
+	for _, path := range []string{codexCLI, claudeCLI} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	registry, err := agent.NewRegistry(&agent.Config{
+		Agents: map[string]agent.AgentConfig{
+			"claude": {CLI: claudeCLI},
+			"codex":  {CLI: codexCLI},
+		},
+		Roles: agent.RolesConfig{
+			Primary:   &agent.RoleConfig{Agent: "codex", Window: 0},
+			Companion: &agent.RoleConfig{Agent: "claude", Window: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	svc.Registry = registry
+
+	result, err := svc.Start(t.Context(), StartOpts{
+		Title:  "codex-primary",
+		Cwd:    t.TempDir(),
+		Layout: LayoutClassic,
+	})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	m, err := svc.Store.Read(result.SessionID)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if len(m.Agents) != 2 {
+		t.Fatalf("expected 2 agents, got %+v", m.Agents)
+	}
+	if m.Agents[0].Role != "primary" || m.Agents[0].Name != "codex" {
+		t.Fatalf("primary agent: got %+v", m.Agents[0])
+	}
+	if m.Agents[1].Role != "companion" || m.Agents[1].Name != "claude" {
+		t.Fatalf("companion agent: got %+v", m.Agents[1])
+	}
+
+	foundPrimaryCmd := false
+	for _, call := range runner.calls {
+		if len(call.args) >= 1 && call.args[0] == "split-window" && strings.Contains(call.args[len(call.args)-1], codexCLI) {
+			foundPrimaryCmd = true
+			break
+		}
+	}
+	if !foundPrimaryCmd {
+		t.Fatal("expected primary pane to launch Codex command")
+	}
+}
+
+func TestStart_NoCompanionRegistry(t *testing.T) {
+	t.Parallel()
+	svc, _ := setupService(t)
+	svc.Now = func() int64 { return 6666 }
+	claudeCLI := filepath.Join(t.TempDir(), "claude-bin")
+	if err := os.WriteFile(claudeCLI, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write %s: %v", claudeCLI, err)
+	}
+
+	registry, err := agent.NewRegistry(&agent.Config{
+		Agents: map[string]agent.AgentConfig{
+			"claude": {CLI: claudeCLI},
+		},
+		Roles: agent.RolesConfig{
+			Primary: &agent.RoleConfig{Agent: "claude", Window: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	svc.Registry = registry
+
+	result, err := svc.Start(t.Context(), StartOpts{
+		Title:  "solo",
+		Cwd:    t.TempDir(),
+		Layout: LayoutClassic,
+	})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	m, err := svc.Store.Read(result.SessionID)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if len(m.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %+v", m.Agents)
+	}
+	if m.Agents[0].Role != "primary" || m.Agents[0].Name != "claude" {
+		t.Fatalf("primary agent: got %+v", m.Agents[0])
 	}
 }
 
@@ -1439,6 +1516,35 @@ func TestContinue_BadCwd(t *testing.T) {
 	// Should succeed (falls back to getwd when cwd doesn't exist)
 	if err != nil {
 		t.Fatalf("continue with bad cwd: %v", err)
+	}
+}
+
+func TestContinue_UsesAgentManifestResumeIDs(t *testing.T) {
+	t.Parallel()
+	svc, runner := setupService(t)
+	cwd := t.TempDir()
+
+	if err := svc.Store.Create(state.Manifest{
+		PartyID: "party-agents",
+		Title:   "agent-manifest",
+		Cwd:     cwd,
+		Agents: []state.AgentManifest{
+			{Name: "claude", Role: "primary", CLI: "/usr/bin/claude", ResumeID: "claude-resume", Window: 1},
+			{Name: "codex", Role: "companion", CLI: "/usr/bin/codex", ResumeID: "codex-resume", Window: 0},
+		},
+		AgentPath: "/usr/bin",
+	}); err != nil {
+		t.Fatalf("create manifest: %v", err)
+	}
+
+	if _, err := svc.Continue(t.Context(), "party-agents"); err != nil {
+		t.Fatalf("continue: %v", err)
+	}
+	if got := runner.envVars["party-agents:CLAUDE_SESSION_ID"]; got != "claude-resume" {
+		t.Fatalf("CLAUDE_SESSION_ID: got %q", got)
+	}
+	if got := runner.envVars["party-agents:CODEX_THREAD_ID"]; got != "codex-resume" {
+		t.Fatalf("CODEX_THREAD_ID: got %q", got)
 	}
 }
 
@@ -1635,7 +1741,19 @@ func TestSetResumeEnv(t *testing.T) {
 
 	runner.sessions["party-env"] = true
 
-	if err := svc.setResumeEnv(t.Context(), "party-env", "claude-1", "codex-1"); err != nil {
+	resume := map[agent.Role]resumeInfo{
+		agent.RolePrimary: {
+			agentName: "claude",
+			envVar:    "CLAUDE_SESSION_ID",
+			resumeID:  "claude-1",
+		},
+		agent.RoleCompanion: {
+			agentName: "codex",
+			envVar:    "CODEX_THREAD_ID",
+			resumeID:  "codex-1",
+		},
+	}
+	if err := svc.setResumeEnv(t.Context(), "party-env", resume); err != nil {
 		t.Fatalf("setResumeEnv: %v", err)
 	}
 
@@ -1653,7 +1771,7 @@ func TestSetResumeEnv_Empty(t *testing.T) {
 
 	runner.sessions["party-env2"] = true
 
-	if err := svc.setResumeEnv(t.Context(), "party-env2", "", ""); err != nil {
+	if err := svc.setResumeEnv(t.Context(), "party-env2", map[agent.Role]resumeInfo{}); err != nil {
 		t.Fatalf("setResumeEnv: %v", err)
 	}
 
@@ -1813,23 +1931,6 @@ func TestCleanupHook_ApostropheInRoot(t *testing.T) {
 	cmd := exec.CommandContext(t.Context(), "bash", "-n", scriptPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Errorf("cleanup script has syntax errors: %v\n%s\nscript:\n%s", err, out, script)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// clearClaudeCodeEnv
-// ---------------------------------------------------------------------------
-
-func TestClearClaudeCodeEnv(t *testing.T) {
-	t.Parallel()
-	svc, runner := setupService(t)
-
-	runner.sessions["party-clear"] = true
-	runner.envVars["party-clear:CLAUDECODE"] = "1"
-
-	// Should not error even when unset fails (best-effort)
-	if err := svc.clearClaudeCodeEnv(t.Context(), "party-clear"); err != nil {
-		t.Fatalf("clearClaudeCodeEnv: %v", err)
 	}
 }
 

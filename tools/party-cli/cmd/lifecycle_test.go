@@ -54,8 +54,10 @@ func hasSessionRunner(live ...string) *mockRunner {
 func TestStartCmd_Basic(t *testing.T) {
 	t.Parallel()
 	store := setupStore(t)
+	cwd := t.TempDir()
+	writeAgentConfig(t, cwd)
 
-	out := runCmd(t, store, allPassRunner(), "start", "--cwd", t.TempDir(), "test-title")
+	out := runCmd(t, store, allPassRunner(), "start", "--cwd", cwd, "test-title")
 	if !strings.Contains(out, "started") {
 		t.Fatalf("expected 'started' in output, got: %s", out)
 	}
@@ -71,6 +73,9 @@ func TestStartCmd_Basic(t *testing.T) {
 func TestContinueCmd_AlreadyRunning(t *testing.T) {
 	t.Parallel()
 	store := setupStore(t)
+	cwd := t.TempDir()
+	writeAgentConfig(t, cwd)
+	createManifest(t, store, "party-alive", "alive", cwd, "regular")
 
 	out := runCmd(t, store, hasSessionRunner("party-alive"), "continue", "party-alive")
 	if !strings.Contains(out, "already running") {
@@ -163,6 +168,7 @@ func TestSpawnCmd_Basic(t *testing.T) {
 	t.Parallel()
 	store := setupStore(t)
 	cwd := t.TempDir()
+	writeAgentConfig(t, cwd)
 	createManifest(t, store, "party-master", "orch", cwd, "master")
 
 	out := runCmd(t, store, allPassRunner(), "spawn", "party-master", "worker-title")
