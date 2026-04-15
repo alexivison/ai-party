@@ -45,7 +45,19 @@ it is a master session.`,
 				masterID = id
 			}
 
-			svc := session.NewService(store, client, repoRoot)
+			registryCwd := opts.cwd
+			if registryCwd == "" {
+				masterManifest, err := store.Read(masterID)
+				if err != nil {
+					return fmt.Errorf("read master manifest: %w", err)
+				}
+				registryCwd = masterManifest.Cwd
+			}
+			registry, err := loadSessionRegistry(registryCwd)
+			if err != nil {
+				return err
+			}
+			svc := session.NewService(store, client, repoRoot, registry)
 			result, err := svc.Spawn(cmd.Context(), masterID, session.SpawnOpts{
 				Title:          title,
 				Cwd:            opts.cwd,

@@ -1,32 +1,54 @@
 package session
 
-import "context"
+import (
+	"context"
+	"fmt"
+
+	"github.com/anthropics/ai-party/tools/party-cli/internal/agent"
+)
 
 // launchConfig captures the resolved parameters for launching a session.
 // Both Start and Continue build this from their respective inputs, then
 // delegate to launchSession for the shared setup sequence.
 type launchConfig struct {
-	sessionID      string
-	cwd            string
-	runtimeDir     string
-	title          string
-	claudeBin      string
-	codexBin       string
-	agentPath      string
-	claudeResumeID string
-	codexResumeID  string
-	prompt         string
-	master         bool
-	worker         bool
-	layout         LayoutMode
+	sessionID   string
+	cwd         string
+	runtimeDir  string
+	title       string
+	agentPath   string
+	prompt      string
+	master      bool
+	worker      bool
+	layout      LayoutMode
+	agentCmds   map[agent.Role]string
+	agentResume map[agent.Role]resumeInfo
+}
+
+type resumeInfo struct {
+	agentName string
+	envVar    string
+	resumeID  string
 }
 
 // launchSession performs the shared tmux session setup:
 // clear env → set PARTY_SESSION → build commands → persist resume IDs →
 // set resume env → choose layout → launch panes → set cleanup hook.
 func (s *Service) launchSession(ctx context.Context, lc launchConfig) error {
-	if err := s.clearClaudeCodeEnv(ctx, lc.sessionID); err != nil {
+	registry, err := s.agentRegistry()
+	if err != nil {
 		return err
+	}
+	bindings, err := sessionBindings(registry, lc.master)
+	if err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		if _, ok := lc.agentCmds[binding.Role]; !ok {
+			continue
+		}
+		if err := binding.Agent.PreLaunchSetup(ctx, s.Client, lc.sessionID); err != nil {
+			return err
+		}
 	}
 
 	if err := s.Client.SetEnvironment(ctx, lc.sessionID, "PARTY_SESSION", lc.sessionID); err != nil {
@@ -34,14 +56,17 @@ func (s *Service) launchSession(ctx context.Context, lc launchConfig) error {
 	}
 
 	if lc.master {
-		claudeCmd := buildClaudeCmd(lc.claudeBin, lc.agentPath, lc.claudeResumeID, lc.prompt, lc.title, true)
-		if err := s.persistResumeIDs(lc.sessionID, lc.runtimeDir, lc.claudeResumeID, ""); err != nil {
+		primaryCmd := lc.agentCmds[agent.RolePrimary]
+		if primaryCmd == "" {
+			return fmt.Errorf("primary agent command not configured")
+		}
+		if err := s.persistResumeIDs(lc.runtimeDir, lc.agentResume); err != nil {
 			return err
 		}
-		if err := s.setResumeEnv(ctx, lc.sessionID, lc.claudeResumeID, ""); err != nil {
+		if err := s.setResumeEnv(ctx, lc.sessionID, lc.agentResume); err != nil {
 			return err
 		}
-		if err := s.launchMaster(ctx, lc.sessionID, lc.cwd, claudeCmd); err != nil {
+		if err := s.launchMaster(ctx, lc.sessionID, lc.cwd, primaryCmd); err != nil {
 			return err
 		}
 	} else {
@@ -53,21 +78,24 @@ func (s *Service) launchSession(ctx context.Context, lc launchConfig) error {
 			return err
 		}
 
-		claudeCmd := buildClaudeCmd(lc.claudeBin, lc.agentPath, lc.claudeResumeID, lc.prompt, lc.title, false)
-		codexCmd := buildCodexCmd(lc.codexBin, lc.agentPath, lc.codexResumeID)
-		if err := s.persistResumeIDs(lc.sessionID, lc.runtimeDir, lc.claudeResumeID, lc.codexResumeID); err != nil {
+		primaryCmd := lc.agentCmds[agent.RolePrimary]
+		if primaryCmd == "" {
+			return fmt.Errorf("primary agent command not configured")
+		}
+		companionCmd := lc.agentCmds[agent.RoleCompanion]
+		if err := s.persistResumeIDs(lc.runtimeDir, lc.agentResume); err != nil {
 			return err
 		}
-		if err := s.setResumeEnv(ctx, lc.sessionID, lc.claudeResumeID, lc.codexResumeID); err != nil {
+		if err := s.setResumeEnv(ctx, lc.sessionID, lc.agentResume); err != nil {
 			return err
 		}
 
 		if layout == LayoutSidebar {
-			if err := s.launchSidebar(ctx, lc.sessionID, lc.cwd, codexCmd, claudeCmd, lc.title, lc.worker); err != nil {
+			if err := s.launchSidebar(ctx, lc.sessionID, lc.cwd, companionCmd, primaryCmd, lc.title, lc.worker); err != nil {
 				return err
 			}
 		} else {
-			if err := s.launchClassic(ctx, lc.sessionID, lc.cwd, codexCmd, claudeCmd); err != nil {
+			if err := s.launchClassic(ctx, lc.sessionID, lc.cwd, companionCmd, primaryCmd); err != nil {
 				return err
 			}
 		}

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -328,6 +329,25 @@ func TestProviderMetadata(t *testing.T) {
 	}
 }
 
+func TestClaudePreLaunchSetup_UnsetsClaudeCode(t *testing.T) {
+	t.Parallel()
+
+	client := &recordingTmuxClient{}
+	if err := NewClaude(AgentConfig{}).PreLaunchSetup(context.Background(), client, "party-test"); err != nil {
+		t.Fatalf("PreLaunchSetup: %v", err)
+	}
+
+	if len(client.unsetCalls) != 2 {
+		t.Fatalf("unset calls: got %d, want 2", len(client.unsetCalls))
+	}
+	if client.unsetCalls[0] != (unsetCall{session: "", key: "CLAUDECODE"}) {
+		t.Fatalf("global unset: got %+v", client.unsetCalls[0])
+	}
+	if client.unsetCalls[1] != (unsetCall{session: "party-test", key: "CLAUDECODE"}) {
+		t.Fatalf("session unset: got %+v", client.unsetCalls[1])
+	}
+}
+
 func TestCodexReadState_StaleWorking(t *testing.T) {
 	t.Parallel()
 
@@ -361,4 +381,18 @@ func setupRepoWithConfig(t *testing.T, tomlBody string) string {
 		t.Fatalf("write .party.toml: %v", err)
 	}
 	return root
+}
+
+type unsetCall struct {
+	session string
+	key     string
+}
+
+type recordingTmuxClient struct {
+	unsetCalls []unsetCall
+}
+
+func (c *recordingTmuxClient) UnsetEnvironment(_ context.Context, session, key string) error {
+	c.unsetCalls = append(c.unsetCalls, unsetCall{session: session, key: key})
+	return nil
 }

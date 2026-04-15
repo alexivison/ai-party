@@ -111,6 +111,26 @@ func ageManifest(t *testing.T, store *state.Store, id string, days int) {
 	}
 }
 
+func writeAgentConfig(t *testing.T, cwd string) {
+	t.Helper()
+	const configBody = `
+[agents.claude]
+cli = "/bin/sh"
+
+[agents.codex]
+cli = "/bin/sh"
+
+[roles.primary]
+agent = "claude"
+
+[roles.companion]
+agent = "codex"
+`
+	if err := os.WriteFile(filepath.Join(cwd, ".party.toml"), []byte(strings.TrimSpace(configBody)+"\n"), 0o644); err != nil {
+		t.Fatalf("write .party.toml: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // list tests
 // ---------------------------------------------------------------------------

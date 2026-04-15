@@ -18,7 +18,15 @@ func newContinueCmd(store *state.Store, client *tmux.Client, repoRoot string) *c
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sessionID := args[0]
-			svc := session.NewService(store, client, repoRoot)
+			manifest, err := store.Read(sessionID)
+			if err != nil {
+				return err
+			}
+			registry, err := loadSessionRegistry(manifest.Cwd)
+			if err != nil {
+				return err
+			}
+			svc := session.NewService(store, client, repoRoot, registry)
 			result, err := svc.Continue(cmd.Context(), sessionID)
 			if err != nil {
 				return err

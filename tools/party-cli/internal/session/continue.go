@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/anthropics/ai-party/tools/party-cli/internal/agent"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/state"
 )
 
@@ -62,11 +63,69 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 	// Always recompute — legacy manifests may have stale names without role suffixes.
 	winName := windowName(m.Title, role)
 
-	claudeBin := fallback(m.ClaudeBin, resolveBinary("CLAUDE_BIN", "claude", os.Getenv("HOME")+"/.local/bin/claude"))
-	codexBin := fallback(m.CodexBin, resolveBinary("CODEX_BIN", "codex", "/opt/homebrew/bin/codex"))
-	agentPath := fallback(m.AgentPath, fmt.Sprintf("%s/.local/bin:/opt/homebrew/bin:%s", os.Getenv("HOME"), os.Getenv("PATH")))
-	claudeResumeID := m.ExtraString("claude_session_id")
-	codexResumeID := m.ExtraString("codex_thread_id")
+	registry, err := s.agentRegistry()
+	if err != nil {
+		return ContinueResult{}, fmt.Errorf("load agent registry: %w", err)
+	}
+	bindings, err := sessionBindings(registry, m.SessionType == "master")
+	if err != nil {
+		return ContinueResult{}, fmt.Errorf("resolve session roles: %w", err)
+	}
+
+	agentPath := fallback(m.AgentPath, defaultAgentPath())
+	agentCmds := make(map[agent.Role]string, len(bindings))
+	agentResume := make(map[agent.Role]resumeInfo, len(bindings))
+	manifestAgents := make([]state.AgentManifest, 0, len(bindings))
+
+	for _, binding := range bindings {
+		provider := binding.Agent
+		agentState, ok := manifestAgent(m.Agents, binding.Role, provider.Name())
+
+		cli := agentState.CLI
+		if cli == "" {
+			var resolved bool
+			cli, resolved = resolveAgentBinary(provider)
+			if !resolved {
+				if binding.Role == agent.RoleCompanion {
+					fmt.Fprintf(os.Stderr, "party-cli: warning: skipping %s companion; binary not found (%s)\n", provider.Name(), cli)
+					continue
+				}
+				return ContinueResult{}, fmt.Errorf("resolve %s binary: not found", provider.Name())
+			}
+		}
+
+		resumeID := agentState.ResumeID
+		if resumeID == "" {
+			resumeID = m.ExtraString(provider.ResumeKey())
+		}
+
+		agentCmds[binding.Role] = provider.BuildCmd(agent.CmdOpts{
+			Binary:    cli,
+			AgentPath: agentPath,
+			ResumeID:  resumeID,
+			Title:     m.Title,
+			Master:    m.SessionType == "master" && binding.Role == agent.RolePrimary,
+		})
+		if resumeID != "" {
+			agentResume[binding.Role] = resumeInfo{
+				agentName: provider.Name(),
+				envVar:    provider.EnvVar(),
+				resumeID:  resumeID,
+			}
+		}
+
+		window := agentState.Window
+		if !ok {
+			window = agentWindow(resolveLayout(), m.SessionType == "master", binding.Role)
+		}
+		manifestAgents = append(manifestAgents, state.AgentManifest{
+			Name:     provider.Name(),
+			Role:     string(binding.Role),
+			CLI:      cli,
+			ResumeID: resumeID,
+			Window:   window,
+		})
+	}
 
 	rtDir, err := ensureRuntimeDir(sessionID)
 	if err != nil {
@@ -80,23 +139,28 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 	isMaster := m.SessionType == "master"
 
 	if err := s.launchSession(ctx, launchConfig{
-		sessionID:      sessionID,
-		cwd:            cwd,
-		runtimeDir:     rtDir,
-		title:          m.Title,
-		claudeBin:      claudeBin,
-		codexBin:       codexBin,
-		agentPath:      agentPath,
-		claudeResumeID: claudeResumeID,
-		codexResumeID:  codexResumeID,
-		master:         isMaster,
-		worker:         m.ExtraString("parent_session") != "",
+		sessionID:   sessionID,
+		cwd:         cwd,
+		runtimeDir:  rtDir,
+		title:       m.Title,
+		agentPath:   agentPath,
+		master:      isMaster,
+		worker:      m.ExtraString("parent_session") != "",
+		agentCmds:   agentCmds,
+		agentResume: agentResume,
 	}); err != nil {
 		return ContinueResult{}, err
 	}
 
 	// Update manifest timestamps
 	if err := s.Store.Update(sessionID, func(m2 *state.Manifest) {
+		m2.Agents = manifestAgents
+		for _, info := range agentResume {
+			provider, providerErr := registry.Get(info.agentName)
+			if providerErr == nil {
+				m2.SetExtra(provider.ResumeKey(), info.resumeID)
+			}
+		}
 		m2.SetExtra("last_resumed_at", state.NowUTC())
 	}); err != nil {
 		return ContinueResult{}, fmt.Errorf("update manifest: %w", err)
@@ -155,4 +219,18 @@ func fallback(v, def string) string {
 		return v
 	}
 	return def
+}
+
+func manifestAgent(agents []state.AgentManifest, role agent.Role, name string) (state.AgentManifest, bool) {
+	for _, candidate := range agents {
+		if candidate.Role == string(role) {
+			return candidate, true
+		}
+	}
+	for _, candidate := range agents {
+		if candidate.Name == name {
+			return candidate, true
+		}
+	}
+	return state.AgentManifest{}, false
 }

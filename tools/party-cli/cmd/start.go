@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/anthropics/ai-party/tools/party-cli/internal/agent"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/session"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/state"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/tmux"
@@ -31,7 +32,11 @@ func newStartCmd(store *state.Store, client *tmux.Client, repoRoot string) *cobr
 				opts.title = args[0]
 			}
 
-			svc := session.NewService(store, client, repoRoot)
+			registry, err := loadSessionRegistry(opts.cwd)
+			if err != nil {
+				return err
+			}
+			svc := session.NewService(store, client, repoRoot, registry)
 			result, err := svc.Start(cmd.Context(), session.StartOpts{
 				Title:          opts.title,
 				Cwd:            opts.cwd,
@@ -74,4 +79,12 @@ func newStartCmd(store *state.Store, client *tmux.Client, repoRoot string) *cobr
 	// Use --attach to have party-cli attach directly after creating the session.
 
 	return cmd
+}
+
+func loadSessionRegistry(cwd string) (*agent.Registry, error) {
+	cfg, err := agent.LoadConfig(cwd, nil)
+	if err != nil {
+		return nil, err
+	}
+	return agent.NewRegistry(cfg)
 }
