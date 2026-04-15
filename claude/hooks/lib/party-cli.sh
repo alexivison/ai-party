@@ -14,6 +14,12 @@ party_cli_query() {
     return 0
   fi
 
+  # Tests use this to simulate a missing CLI even on systems where `go run`
+  # could rebuild it from the checked-out source tree.
+  if [ "${PARTY_CLI_DISABLE_GO_FALLBACK:-}" = "1" ]; then
+    return 1
+  fi
+
   if ! command -v go >/dev/null 2>&1; then
     return 1
   fi

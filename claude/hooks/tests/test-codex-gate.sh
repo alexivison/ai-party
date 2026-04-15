@@ -142,7 +142,7 @@ assert "no companion configured allows commands" \
 
 # Test: no party-cli in PATH -> fail open
 clean_evidence
-OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --approve')" | PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$GATE")
+OUTPUT=$(echo "$(gate_input 'tmux-codex.sh --approve')" | PARTY_CLI_DISABLE_GO_FALLBACK=1 PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$GATE")
 assert "missing party-cli allows commands" \
   '! echo "$OUTPUT" | grep -q "deny"'
 

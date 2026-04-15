@@ -231,7 +231,7 @@ git add file.sh && git commit -q -m "fallback gate"
 append_evidence "$SESSION_ID" "pr-verified" "PASS" "$TMPDIR_BASE"
 append_evidence "$SESSION_ID" "test-runner" "PASS" "$TMPDIR_BASE"
 append_evidence "$SESSION_ID" "check-runner" "PASS" "$TMPDIR_BASE"
-OUTPUT=$(echo "$(gate_input)" | PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$GATE")
+OUTPUT=$(echo "$(gate_input)" | PARTY_CLI_DISABLE_GO_FALLBACK=1 PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$GATE")
 assert "Missing party-cli restores default full gate" \
   'echo "$OUTPUT" | grep -q "deny"'
 

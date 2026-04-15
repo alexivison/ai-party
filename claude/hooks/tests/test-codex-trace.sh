@@ -147,7 +147,7 @@ assert "Full path APPROVED → codex evidence created" 'has_evidence "codex"'
 echo "=== review-complete: missing party-cli falls back to codex evidence ==="
 clean_evidence
 echo "$(bash_input_obj 'tmux-codex.sh --review-complete /tmp/f.toon' "$COMBINED_STDOUT")" \
-  | PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$HOOK" 2>/dev/null
+  | PARTY_CLI_DISABLE_GO_FALLBACK=1 PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$HOOK" 2>/dev/null
 assert "Missing party-cli → codex evidence created" 'has_evidence "codex"'
 
 # ═══ --review-complete with REQUEST_CHANGES ═══════════════════════════════════

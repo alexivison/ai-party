@@ -83,7 +83,7 @@ assert "no companion configured fails open" \
   '! echo "$OUTPUT" | grep -q "deny"'
 
 rm -f "$(config_path)"
-OUTPUT=$(echo "$(hook_input 'tmux send-keys -t companion:0.0 Enter')" | PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$HOOK")
+OUTPUT=$(echo "$(hook_input 'tmux send-keys -t companion:0.0 Enter')" | PARTY_CLI_DISABLE_GO_FALLBACK=1 PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$HOOK")
 assert "missing party-cli fails open" \
   '! echo "$OUTPUT" | grep -q "deny"'
 
