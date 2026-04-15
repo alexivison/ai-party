@@ -161,6 +161,12 @@ func (m *mockRunner) defaultHandler(ctx context.Context, args ...string) (string
 		}
 		return key + "=" + val, nil
 
+	case "display-message":
+		if len(args) > 0 && args[len(args)-1] == "#{pane_in_mode}" {
+			return "0", nil
+		}
+		return "", nil
+
 	case "list-panes":
 		session := flagVal(args, "-t")
 		var lines []string
@@ -237,6 +243,18 @@ func (m *mockRunner) hasCall(prefix ...string) bool {
 			if match {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func (m *mockRunner) hasSendText(target, text string) bool {
+	for _, c := range m.calls {
+		if len(c.args) != 6 {
+			continue
+		}
+		if c.args[0] == "send-keys" && c.args[1] == "-t" && c.args[2] == target && c.args[3] == "-l" && c.args[4] == "--" && c.args[5] == text {
+			return true
 		}
 	}
 	return false
@@ -770,7 +788,7 @@ func TestPromote_Classic(t *testing.T) {
 	runner.sessions["party-worker"] = true
 	createTestManifest(t, svc.Store, "party-worker", "worker", t.TempDir(), "")
 
-	// Set up classic layout panes
+	// Set up a legacy classic layout to prove companion->codex fallback still works.
 	runner.paneRoles["party-worker:0.0"] = "codex"
 	runner.paneRoles["party-worker:0.1"] = "claude"
 	runner.paneRoles["party-worker:0.2"] = "shell"
@@ -790,6 +808,9 @@ func TestPromote_Classic(t *testing.T) {
 	if m.WindowName != "party (worker) [master]" {
 		t.Fatalf("expected manifest WindowName updated, got %q", m.WindowName)
 	}
+	if len(m.Agents) != 1 || m.Agents[0].Role != "primary" || m.Agents[0].Name != "claude" {
+		t.Fatalf("expected only primary agent kept after promote, got %+v", m.Agents)
+	}
 
 	// Verify codex pane replaced with tracker
 	if runner.paneRoles["party-worker:0.0"] != "tracker" {
@@ -799,6 +820,14 @@ func TestPromote_Classic(t *testing.T) {
 	// Verify window renamed with [master] indicator
 	if got := runner.windowNames["party-worker:0"]; got != "party (worker) [master]" {
 		t.Errorf("expected window renamed to %q, got %q", "party (worker) [master]", got)
+	}
+
+	provider, err := svc.Registry.Get("claude")
+	if err != nil {
+		t.Fatalf("registry get claude: %v", err)
+	}
+	if !runner.hasSendText("party-worker:0.1", provider.MasterPrompt()) {
+		t.Fatalf("expected master prompt sent to primary pane")
 	}
 }
 
@@ -821,9 +850,9 @@ func TestPromote_Sidebar(t *testing.T) {
 	runner.envVars["party-side:CODEX_THREAD_ID"] = "codex-stale-123"
 
 	// Set up sidebar layout panes
-	runner.paneRoles["party-side:0.0"] = "codex"
+	runner.paneRoles["party-side:0.0"] = "companion"
 	runner.paneRoles["party-side:1.0"] = "sidebar"
-	runner.paneRoles["party-side:1.1"] = "claude"
+	runner.paneRoles["party-side:1.1"] = "primary"
 	runner.paneRoles["party-side:1.2"] = "shell"
 
 	if err := svc.Promote(t.Context(), "party-side"); err != nil {
@@ -840,6 +869,9 @@ func TestPromote_Sidebar(t *testing.T) {
 	}
 	if m.WindowName != "party (sidebar-worker) [master]" {
 		t.Fatalf("expected manifest WindowName updated, got %q", m.WindowName)
+	}
+	if len(m.Agents) != 1 || m.Agents[0].Role != "primary" || m.Agents[0].Name != "claude" {
+		t.Fatalf("expected only primary agent kept after promote, got %+v", m.Agents)
 	}
 
 	// codex_thread_id should be cleared — master mode has no Wizard.
@@ -865,6 +897,56 @@ func TestPromote_Sidebar(t *testing.T) {
 	// Verify window renamed with [master] indicator (sidebar: window 1)
 	if got := runner.windowNames["party-side:1"]; got != "party (sidebar-worker) [master]" {
 		t.Errorf("expected window renamed to %q, got %q", "party (sidebar-worker) [master]", got)
+	}
+}
+
+func TestPromote_ClearsAgentAgnosticCompanionEnv(t *testing.T) {
+	t.Parallel()
+
+	svc, runner := setupService(t)
+	registry, err := agent.NewRegistry(&agent.Config{
+		Agents: map[string]agent.AgentConfig{
+			"claude": {CLI: "/bin/sh"},
+			"codex":  {CLI: "/bin/sh"},
+		},
+		Roles: agent.RolesConfig{
+			Primary:   &agent.RoleConfig{Agent: "codex", Window: 1},
+			Companion: &agent.RoleConfig{Agent: "claude", Window: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	svc.Registry = registry
+
+	runner.sessions["party-agnostic"] = true
+	createTestManifest(t, svc.Store, "party-agnostic", "agnostic", t.TempDir(), "")
+	if err := svc.Store.Update("party-agnostic", func(m *state.Manifest) {
+		m.Agents = []state.AgentManifest{
+			{Name: "codex", Role: "primary", CLI: "/usr/bin/codex", ResumeID: "codex-primary", Window: 1},
+			{Name: "claude", Role: "companion", CLI: "/usr/bin/claude", ResumeID: "claude-companion", Window: 0},
+		}
+	}); err != nil {
+		t.Fatalf("update manifest agents: %v", err)
+	}
+	runner.envVars["party-agnostic:CLAUDE_SESSION_ID"] = "claude-companion"
+	runner.paneRoles["party-agnostic:0.0"] = "companion"
+	runner.paneRoles["party-agnostic:0.1"] = "primary"
+	runner.paneRoles["party-agnostic:0.2"] = "shell"
+
+	if err := svc.Promote(t.Context(), "party-agnostic"); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	if _, exists := runner.envVars["party-agnostic:CLAUDE_SESSION_ID"]; exists {
+		t.Fatal("expected CLAUDE_SESSION_ID unset")
+	}
+	m, err := svc.Store.Read("party-agnostic")
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if len(m.Agents) != 1 || m.Agents[0].Name != "codex" || m.Agents[0].Role != "primary" {
+		t.Fatalf("expected only codex primary kept after promote, got %+v", m.Agents)
 	}
 }
 
@@ -2164,8 +2246,8 @@ func TestPromoteClassic_Success(t *testing.T) {
 	svc, runner := setupService(t)
 
 	runner.sessions["party-pc"] = true
-	runner.paneRoles["party-pc:0.0"] = "codex"
-	runner.paneRoles["party-pc:0.1"] = "claude"
+	runner.paneRoles["party-pc:0.0"] = "companion"
+	runner.paneRoles["party-pc:0.1"] = "primary"
 
 	if err := svc.promoteClassic(t.Context(), "party-pc", "/tmp", "echo tracker"); err != nil {
 		t.Fatalf("promoteClassic: %v", err)
@@ -2175,12 +2257,28 @@ func TestPromoteClassic_Success(t *testing.T) {
 	}
 }
 
+func TestPromoteClassic_LegacyCodexFallback(t *testing.T) {
+	t.Parallel()
+	svc, runner := setupService(t)
+
+	runner.sessions["party-pc-old"] = true
+	runner.paneRoles["party-pc-old:0.0"] = "codex"
+	runner.paneRoles["party-pc-old:0.1"] = "claude"
+
+	if err := svc.promoteClassic(t.Context(), "party-pc-old", "/tmp", "echo tracker"); err != nil {
+		t.Fatalf("promoteClassic legacy: %v", err)
+	}
+	if runner.paneRoles["party-pc-old:0.0"] != "tracker" {
+		t.Errorf("expected tracker in 0.0, got %q", runner.paneRoles["party-pc-old:0.0"])
+	}
+}
+
 func TestPromoteSidebar_Success(t *testing.T) {
 	t.Parallel()
 	svc, runner := setupService(t)
 
 	runner.sessions["party-ps"] = true
-	runner.paneRoles["party-ps:0.0"] = "codex"
+	runner.paneRoles["party-ps:0.0"] = "companion"
 	runner.paneRoles["party-ps:1.0"] = "sidebar"
 
 	if err := svc.promoteSidebar(t.Context(), "party-ps", "/tmp", "echo tracker"); err != nil {
