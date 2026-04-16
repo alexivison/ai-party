@@ -47,6 +47,11 @@ func NewRegistry(cfg *Config) (*Registry, error) {
 			return nil, err
 		}
 	}
+	if primary, ok := r.bindings[RolePrimary]; ok {
+		if companion, ok := r.bindings[RoleCompanion]; ok && primary.Agent.Name() == companion.Agent.Name() {
+			return nil, fmt.Errorf("primary and companion cannot use the same agent %q", primary.Agent.Name())
+		}
+	}
 
 	return r, nil
 }
@@ -111,4 +116,24 @@ func (r *Registry) Names() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// Resolve returns an agent by name, preferring the configured registry and
+// falling back to built-in providers when the current config does not bind it.
+func Resolve(name string, registry *Registry) (Agent, error) {
+	if registry != nil {
+		if agent, err := registry.Get(name); err == nil {
+			return agent, nil
+		}
+	}
+
+	constructor, ok := providerConstructors[name]
+	if !ok {
+		return nil, fmt.Errorf("agent %q is not configured", name)
+	}
+	cfg := AgentConfig{}
+	if builtin, ok := DefaultConfig().Agents[name]; ok {
+		cfg = builtin
+	}
+	return constructor(cfg), nil
 }

@@ -124,6 +124,26 @@ func TestStartCmd_PrimaryOverrideAndNoCompanion(t *testing.T) {
 	}
 }
 
+func TestStartCmd_RejectsSameProviderForBothRoles(t *testing.T) {
+	store := setupStore(t)
+	cwd := t.TempDir()
+	writeAgentConfig(t, cwd)
+
+	_, err := runCmdErr(t, store, allPassRunner(),
+		"start",
+		"--cwd", cwd,
+		"--primary", "codex",
+		"--companion", "codex",
+		"invalid",
+	)
+	if err == nil {
+		t.Fatal("expected duplicate provider role error")
+	}
+	if !strings.Contains(err.Error(), `cannot use the same agent "codex"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestStartCmd_LegacyResumeFlagsRemainAgentSpecific(t *testing.T) {
 	store := setupStore(t)
 	cwd := t.TempDir()

@@ -21,32 +21,28 @@ type launchConfig struct {
 	worker      bool
 	layout      LayoutMode
 	agentCmds   map[agent.Role]string
+	agents      map[agent.Role]agent.Agent
 	agentResume map[agent.Role]resumeInfo
 }
 
 type resumeInfo struct {
-	agentName string
-	envVar    string
-	resumeID  string
+	provider agent.Agent
+	resumeID string
 }
 
 // launchSession performs the shared tmux session setup:
 // clear env → set PARTY_SESSION → build commands → persist resume IDs →
 // set resume env → choose layout → launch panes → set cleanup hook.
 func (s *Service) launchSession(ctx context.Context, lc launchConfig) error {
-	registry, err := s.agentRegistry()
-	if err != nil {
-		return err
-	}
-	bindings, err := sessionBindings(registry, lc.master)
-	if err != nil {
-		return err
-	}
-	for _, binding := range bindings {
-		if _, ok := lc.agentCmds[binding.Role]; !ok {
+	for _, role := range []agent.Role{agent.RolePrimary, agent.RoleCompanion} {
+		provider, ok := lc.agents[role]
+		if !ok {
 			continue
 		}
-		if err := binding.Agent.PreLaunchSetup(ctx, s.Client, lc.sessionID); err != nil {
+		if _, ok := lc.agentCmds[role]; !ok {
+			continue
+		}
+		if err := provider.PreLaunchSetup(ctx, s.Client, lc.sessionID); err != nil {
 			return err
 		}
 	}

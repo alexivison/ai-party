@@ -80,6 +80,26 @@ agent = "claude"
 	}
 }
 
+func TestNewRegistry_RejectsSameProviderForBothRoles(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewRegistry(&Config{
+		Agents: map[string]AgentConfig{
+			"codex": {CLI: "codex"},
+		},
+		Roles: RolesConfig{
+			Primary:   &RoleConfig{Agent: "codex"},
+			Companion: &RoleConfig{Agent: "codex"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected duplicate provider roles to fail")
+	}
+	if !strings.Contains(err.Error(), `cannot use the same agent "codex"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadConfig_Overrides(t *testing.T) {
 	setupRepoWithConfig(t, `
 [roles.primary]

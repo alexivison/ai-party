@@ -63,30 +63,30 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 	// Always recompute — legacy manifests may have stale names without role suffixes.
 	winName := windowName(m.Title, role)
 
-	registry, err := s.agentRegistry()
+	manifestSpecs, err := orderedManifestAgents(m)
 	if err != nil {
-		return ContinueResult{}, fmt.Errorf("load agent registry: %w", err)
-	}
-	bindings, err := sessionBindings(registry, m.SessionType == "master")
-	if err != nil {
-		return ContinueResult{}, fmt.Errorf("resolve session roles: %w", err)
+		return ContinueResult{}, err
 	}
 
 	agentPath := fallback(m.AgentPath, defaultAgentPath())
-	agentCmds := make(map[agent.Role]string, len(bindings))
-	agentResume := make(map[agent.Role]resumeInfo, len(bindings))
-	manifestAgents := make([]state.AgentManifest, 0, len(bindings))
+	agentCmds := make(map[agent.Role]string, len(manifestSpecs))
+	launchAgents := make(map[agent.Role]agent.Agent, len(manifestSpecs))
+	agentResume := make(map[agent.Role]resumeInfo, len(manifestSpecs))
+	manifestAgents := make([]state.AgentManifest, 0, len(manifestSpecs))
 
-	for _, binding := range bindings {
-		provider := binding.Agent
-		agentState, _ := manifestAgent(m.Agents, binding.Role, provider.Name())
+	for _, agentState := range manifestSpecs {
+		role := agent.Role(agentState.Role)
+		provider, err := agent.Resolve(agentState.Name, s.Registry)
+		if err != nil {
+			return ContinueResult{}, fmt.Errorf("resolve provider %q: %w", agentState.Name, err)
+		}
 
 		cli := agentState.CLI
 		if cli == "" {
 			var resolved bool
 			cli, resolved = resolveAgentBinary(provider)
 			if !resolved {
-				if binding.Role == agent.RoleCompanion {
+				if role == agent.RoleCompanion {
 					fmt.Fprintf(os.Stderr, "party-cli: warning: skipping %s companion; binary not found (%s)\n", provider.Name(), cli)
 					continue
 				}
@@ -99,24 +99,24 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 			resumeID = m.ExtraString(provider.ResumeKey())
 		}
 
-		agentCmds[binding.Role] = provider.BuildCmd(agent.CmdOpts{
+		launchAgents[role] = provider
+		agentCmds[role] = provider.BuildCmd(agent.CmdOpts{
 			Binary:    cli,
 			AgentPath: agentPath,
 			ResumeID:  resumeID,
 			Title:     m.Title,
-			Master:    m.SessionType == "master" && binding.Role == agent.RolePrimary,
+			Master:    m.SessionType == "master" && role == agent.RolePrimary,
 		})
 		if resumeID != "" {
-			agentResume[binding.Role] = resumeInfo{
-				agentName: provider.Name(),
-				envVar:    provider.EnvVar(),
-				resumeID:  resumeID,
+			agentResume[role] = resumeInfo{
+				provider: provider,
+				resumeID: resumeID,
 			}
 		}
 
 		manifestAgents = append(manifestAgents, state.AgentManifest{
 			Name:     provider.Name(),
-			Role:     string(binding.Role),
+			Role:     string(role),
 			CLI:      cli,
 			ResumeID: resumeID,
 			Window:   agentState.Window,
@@ -149,6 +149,7 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 		master:      isMaster,
 		worker:      m.ExtraString("parent_session") != "",
 		agentCmds:   agentCmds,
+		agents:      launchAgents,
 		agentResume: agentResume,
 	}); err != nil {
 		return ContinueResult{}, err
@@ -158,9 +159,8 @@ func (s *Service) Continue(ctx context.Context, sessionID string) (ContinueResul
 	if err := s.Store.Update(sessionID, func(m2 *state.Manifest) {
 		m2.Agents = manifestAgents
 		for _, info := range agentResume {
-			provider, providerErr := registry.Get(info.agentName)
-			if providerErr == nil {
-				m2.SetExtra(provider.ResumeKey(), info.resumeID)
+			if info.provider != nil {
+				m2.SetExtra(info.provider.ResumeKey(), info.resumeID)
 			}
 		}
 		m2.SetExtra("last_resumed_at", state.NowUTC())
@@ -223,16 +223,30 @@ func fallback(v, def string) string {
 	return def
 }
 
-func manifestAgent(agents []state.AgentManifest, role agent.Role, name string) (state.AgentManifest, bool) {
-	for _, candidate := range agents {
-		if candidate.Role == string(role) {
-			return candidate, true
+func orderedManifestAgents(m state.Manifest) ([]state.AgentManifest, error) {
+	indexed := make(map[agent.Role]state.AgentManifest, len(m.Agents))
+	for _, spec := range m.Agents {
+		role := agent.Role(spec.Role)
+		switch role {
+		case agent.RolePrimary, agent.RoleCompanion:
+			indexed[role] = spec
+		default:
+			return nil, fmt.Errorf("manifest has unknown agent role %q", spec.Role)
 		}
 	}
-	for _, candidate := range agents {
-		if candidate.Name == name {
-			return candidate, true
+
+	if _, ok := indexed[agent.RolePrimary]; !ok {
+		return nil, fmt.Errorf("manifest is missing a primary agent")
+	}
+
+	ordered := []state.AgentManifest{indexed[agent.RolePrimary]}
+	if m.SessionType != "master" {
+		if spec, ok := indexed[agent.RoleCompanion]; ok {
+			ordered = append(ordered, spec)
 		}
 	}
-	return state.AgentManifest{}, false
+	if len(ordered) > 1 && ordered[0].Name == ordered[1].Name && ordered[0].Name != "" {
+		return nil, fmt.Errorf("manifest uses the same agent %q for primary and companion, which is not supported", ordered[0].Name)
+	}
+	return ordered, nil
 }

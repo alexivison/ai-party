@@ -70,6 +70,7 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 	}
 
 	agentCmds := make(map[agent.Role]string, len(bindings))
+	launchAgents := make(map[agent.Role]agent.Agent, len(bindings))
 	agentResume := make(map[agent.Role]resumeInfo, len(bindings))
 	manifestAgents := make([]state.AgentManifest, 0, len(bindings))
 	resumeMap := legacyResumeMap(opts.ClaudeResumeID, opts.CodexResumeID)
@@ -95,6 +96,7 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 		if binding.Role == agent.RolePrimary {
 			prompt = initialPrompt
 		}
+		launchAgents[binding.Role] = provider
 		agentCmds[binding.Role] = provider.BuildCmd(agent.CmdOpts{
 			Binary:    cli,
 			AgentPath: agentPath,
@@ -105,9 +107,8 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 		})
 		if resumeID != "" {
 			agentResume[binding.Role] = resumeInfo{
-				agentName: provider.Name(),
-				envVar:    provider.EnvVar(),
-				resumeID:  resumeID,
+				provider: provider,
+				resumeID: resumeID,
 			}
 		}
 		manifestAgents = append(manifestAgents, state.AgentManifest{
@@ -186,6 +187,7 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (StartResult, error
 		worker:      opts.MasterID != "",
 		layout:      layout,
 		agentCmds:   agentCmds,
+		agents:      launchAgents,
 		agentResume: agentResume,
 	}); err != nil {
 		return StartResult{}, err
@@ -267,22 +269,14 @@ func resolveLayout() LayoutMode {
 
 // persistResumeIDs writes resume IDs to the runtime directory.
 func (s *Service) persistResumeIDs(rtDir string, resume map[agent.Role]resumeInfo) error {
-	registry, err := s.agentRegistry()
-	if err != nil {
-		return err
-	}
 	for _, role := range []agent.Role{agent.RolePrimary, agent.RoleCompanion} {
 		info, ok := resume[role]
-		if !ok || info.resumeID == "" {
+		if !ok || info.resumeID == "" || info.provider == nil {
 			continue
 		}
-		provider, err := registry.Get(info.agentName)
-		if err != nil {
-			return err
-		}
-		path := filepath.Join(rtDir, provider.ResumeFileName())
+		path := filepath.Join(rtDir, info.provider.ResumeFileName())
 		if err := os.WriteFile(path, []byte(info.resumeID+"\n"), 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", provider.ResumeFileName(), err)
+			return fmt.Errorf("write %s: %w", info.provider.ResumeFileName(), err)
 		}
 	}
 	return nil
@@ -292,10 +286,10 @@ func (s *Service) persistResumeIDs(rtDir string, resume map[agent.Role]resumeInf
 func (s *Service) setResumeEnv(ctx context.Context, sessionID string, resume map[agent.Role]resumeInfo) error {
 	for _, role := range []agent.Role{agent.RolePrimary, agent.RoleCompanion} {
 		info, ok := resume[role]
-		if !ok || info.resumeID == "" {
+		if !ok || info.resumeID == "" || info.provider == nil {
 			continue
 		}
-		if err := s.Client.SetEnvironment(ctx, sessionID, info.envVar, info.resumeID); err != nil {
+		if err := s.Client.SetEnvironment(ctx, sessionID, info.provider.EnvVar(), info.resumeID); err != nil {
 			return err
 		}
 	}

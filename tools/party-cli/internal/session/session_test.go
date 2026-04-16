@@ -1450,14 +1450,12 @@ func TestPersistResumeIDs(t *testing.T) {
 	dir := t.TempDir()
 	resume := map[agent.Role]resumeInfo{
 		agent.RolePrimary: {
-			agentName: "claude",
-			envVar:    "CLAUDE_SESSION_ID",
-			resumeID:  "claude-id",
+			provider: agent.NewClaude(agent.AgentConfig{}),
+			resumeID: "claude-id",
 		},
 		agent.RoleCompanion: {
-			agentName: "codex",
-			envVar:    "CODEX_THREAD_ID",
-			resumeID:  "codex-id",
+			provider: agent.NewCodex(agent.AgentConfig{}),
+			resumeID: "codex-id",
 		},
 	}
 	if err := svc.persistResumeIDs(dir, resume); err != nil {
@@ -1839,6 +1837,116 @@ func TestContinue_UsesAgentManifestResumeIDs(t *testing.T) {
 	}
 }
 
+func TestContinue_UsesManifestAgentsNotCurrentRegistry(t *testing.T) {
+	t.Parallel()
+	svc, runner := setupService(t)
+	cwd := t.TempDir()
+
+	codexCLI := filepath.Join(cwd, "codex-bin")
+	claudeCLI := filepath.Join(cwd, "claude-bin")
+	for _, path := range []string{codexCLI, claudeCLI} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	swappedRegistry, err := agent.NewRegistry(&agent.Config{
+		Agents: map[string]agent.AgentConfig{
+			"claude": {CLI: claudeCLI},
+			"codex":  {CLI: codexCLI},
+		},
+		Roles: agent.RolesConfig{
+			Primary:   &agent.RoleConfig{Agent: "claude", Window: -1},
+			Companion: &agent.RoleConfig{Agent: "codex", Window: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistry(swapped): %v", err)
+	}
+	svc.Registry = swappedRegistry
+
+	if err := svc.Store.Create(state.Manifest{
+		PartyID: "party-manifest",
+		Title:   "manifest-source",
+		Cwd:     cwd,
+		Agents: []state.AgentManifest{
+			{Name: "codex", Role: "primary", CLI: codexCLI, ResumeID: "codex-primary", Window: 1},
+			{Name: "claude", Role: "companion", CLI: claudeCLI, ResumeID: "claude-companion", Window: 0},
+		},
+		AgentPath: "/usr/bin",
+	}); err != nil {
+		t.Fatalf("create manifest: %v", err)
+	}
+
+	if _, err := svc.Continue(t.Context(), "party-manifest"); err != nil {
+		t.Fatalf("continue: %v", err)
+	}
+
+	m, err := svc.Store.Read("party-manifest")
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if len(m.Agents) != 2 {
+		t.Fatalf("expected 2 agents, got %+v", m.Agents)
+	}
+	if m.Agents[0].Role != "primary" || m.Agents[0].Name != "codex" || m.Agents[0].CLI != codexCLI {
+		t.Fatalf("primary manifest agent: got %+v", m.Agents[0])
+	}
+	if m.Agents[1].Role != "companion" || m.Agents[1].Name != "claude" || m.Agents[1].CLI != claudeCLI {
+		t.Fatalf("companion manifest agent: got %+v", m.Agents[1])
+	}
+
+	var sawCodexPrimary, sawClaudeCompanion bool
+	for _, call := range runner.calls {
+		if len(call.args) < 2 {
+			continue
+		}
+		if call.args[0] != "split-window" && call.args[0] != "respawn-pane" {
+			continue
+		}
+		cmd := call.args[len(call.args)-1]
+		if strings.Contains(cmd, codexCLI) && strings.Contains(cmd, "--dangerously-bypass-approvals-and-sandbox") {
+			sawCodexPrimary = true
+		}
+		if strings.Contains(cmd, claudeCLI) && strings.Contains(cmd, "--permission-mode bypassPermissions") {
+			sawClaudeCompanion = true
+		}
+	}
+	if !sawCodexPrimary {
+		t.Fatal("expected Codex primary launch command from manifest agent")
+	}
+	if !sawClaudeCompanion {
+		t.Fatal("expected Claude companion launch command from manifest agent")
+	}
+}
+
+func TestContinue_RejectsSameProviderInBothRoles(t *testing.T) {
+	t.Parallel()
+	svc, _ := setupService(t)
+	cwd := t.TempDir()
+
+	if err := svc.Store.Create(state.Manifest{
+		PartyID: "party-duplicate",
+		Title:   "duplicate-provider",
+		Cwd:     cwd,
+		Agents: []state.AgentManifest{
+			{Name: "codex", Role: "primary", CLI: "/usr/bin/codex", ResumeID: "codex-primary", Window: 1},
+			{Name: "codex", Role: "companion", CLI: "/usr/bin/codex", ResumeID: "codex-companion", Window: 0},
+		},
+		AgentPath: "/usr/bin",
+	}); err != nil {
+		t.Fatalf("create manifest: %v", err)
+	}
+
+	_, err := svc.Continue(t.Context(), "party-duplicate")
+	if err == nil {
+		t.Fatal("expected duplicate provider continue to fail")
+	}
+	if !strings.Contains(err.Error(), `same agent "codex"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // Test NowUTC returns a timestamp
 func TestNowUTC(t *testing.T) {
 	t.Parallel()
@@ -2138,14 +2246,12 @@ func TestSetResumeEnv(t *testing.T) {
 
 	resume := map[agent.Role]resumeInfo{
 		agent.RolePrimary: {
-			agentName: "claude",
-			envVar:    "CLAUDE_SESSION_ID",
-			resumeID:  "claude-1",
+			provider: agent.NewClaude(agent.AgentConfig{}),
+			resumeID: "claude-1",
 		},
 		agent.RoleCompanion: {
-			agentName: "codex",
-			envVar:    "CODEX_THREAD_ID",
-			resumeID:  "codex-1",
+			provider: agent.NewCodex(agent.AgentConfig{}),
+			resumeID: "codex-1",
 		},
 	}
 	if err := svc.setResumeEnv(t.Context(), "party-env", resume); err != nil {
