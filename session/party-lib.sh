@@ -21,7 +21,7 @@ party_runtime_dir() {
 }
 
 # Write the companion status file atomically via .tmp + mv.
-# The filename remains codex-status.json for backward compatibility.
+# The Codex runtime still owns codex-status.json, so companion helpers write that file.
 # Usage: write_codex_status RUNTIME_DIR STATE [TARGET] [MODE] [VERDICT] [ERROR]
 write_codex_status() {
   local runtime_dir="${1:?Usage: write_codex_status RUNTIME_DIR STATE [TARGET] [MODE] [VERDICT] [ERROR]}"

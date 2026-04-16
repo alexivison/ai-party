@@ -3,8 +3,7 @@ name: agent-transport
 description: >-
   Shared tmux transport for cross-agent coordination. Use the role-based
   scripts `tmux-companion.sh` and `tmux-primary.sh` from the shared
-  `agent-transport` skill. Legacy `codex-transport`, `claude-transport`,
-  `tmux-codex.sh`, and `tmux-claude.sh` remain thin wrappers during migration.
+  `agent-transport` skill.
 user-invocable: false
 ---
 
@@ -15,7 +14,7 @@ Use the shared role-based transport scripts:
 - `tmux-companion.sh` when sending work to the companion
 - `tmux-primary.sh` when sending a reply or completion notice to the primary
 
-The harness still accepts legacy provider-named wrappers for compatibility, but docs and prompts should prefer the shared `agent-transport` paths.
+Older sessions may still emit `[CLAUDE]` / `[CODEX]` prefixes; the transport continues to recognize those prefixes alongside `[PRIMARY]` / `[COMPANION]`.
 
 ## Primary Role
 
@@ -139,7 +138,7 @@ Use the shared helper at `~/.claude/skills/agent-transport/scripts/toon-transpor
 ## Important
 
 - `--review`, `--plan-review`, `--prompt` are NON-BLOCKING.
-- `--review-complete` emits the default transport sentinel `CODEX_REVIEW_RAN` after findings exist.
+- `--review-complete` emits the transport sentinel `COMPANION_REVIEW_RAN` after findings exist.
 - **Self-approval blocked.** Verdict comes from the companion's `VERDICT:` line in the findings file.
 - Workflow skills enforce critics before `--review`. Hook only blocks `--approve`.
 - **Blocking findings:** fix → commit → critics → `--review` → `--review-complete`.

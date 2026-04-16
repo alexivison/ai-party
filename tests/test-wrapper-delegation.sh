@@ -172,6 +172,12 @@ assert "party.sh does not source party-lib.sh" \
 assert "party-relay.sh --companion routes through companion helper" \
   'grep -q "party_companion_pane_target" "$REPO_ROOT/session/party-relay.sh"'
 
+assert "party-relay.sh legacy --wizard alias removed" \
+  '! grep -q -- "--wizard" "$REPO_ROOT/session/party-relay.sh"'
+
+assert "legacy provider transport skills are removed" \
+  '[ ! -e "$REPO_ROOT/claude/skills/codex-transport" ] && [ ! -e "$REPO_ROOT/codex/skills/claude-transport" ]'
+
 # ---- Verify vestigial scripts are deleted ----
 assert "party-picker.sh is deleted" \
   '[ ! -f "$REPO_ROOT/session/party-picker.sh" ]'

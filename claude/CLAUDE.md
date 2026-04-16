@@ -66,7 +66,7 @@ Use the role-aware transport scripts only; never raw tmux commands. If you are t
 
 ### When to Dispatch
 
-When acting as primary, see `agent-transport` for dispatch guidelines (mandatory and proactive triggers). Legacy `codex-transport` wrappers remain for backward compatibility.
+When acting as primary, see `agent-transport` for dispatch guidelines (mandatory and proactive triggers).
 
 ### Transport
 

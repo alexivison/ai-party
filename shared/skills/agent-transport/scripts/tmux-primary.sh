@@ -101,11 +101,11 @@ if [[ $_send_rc -eq 0 || $_send_rc -eq 76 ]]; then
     fi
     write_companion_status "$RUNTIME_DIR" "idle" "" "" "$_verdict"
   fi
-  echo "CLAUDE_MESSAGE_SENT"
+  echo "PRIMARY_MESSAGE_SENT"
 else
   if $_is_completion && [[ "$sender_role" == "companion" ]]; then
     RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
     write_companion_status "$RUNTIME_DIR" "error" "" "" "" "completion delivery failed: primary pane busy"
   fi
-  echo "CLAUDE_MESSAGE_DROPPED"
+  echo "PRIMARY_MESSAGE_DROPPED"
 fi

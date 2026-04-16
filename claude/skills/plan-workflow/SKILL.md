@@ -60,9 +60,9 @@ PROMPT_EOF
 ### Error Handling
 
 Check the script's stdout for the default transport sentinel strings:
-- `CODEX_TASK_REQUESTED` — success, proceed to wait
-- `CODEX_TASK_DROPPED` — the default companion pane is busy. Wait briefly and retry, or inform the user.
-- `CODEX_NOT_AVAILABLE` — master session with no companion pane. Inform the user that planning
+- `COMPANION_TASK_REQUESTED` — success, proceed to wait
+- `COMPANION_TASK_DROPPED` — the default companion pane is busy. Wait briefly and retry, or inform the user.
+- `COMPANION_NOT_AVAILABLE` — master session with no companion pane. Inform the user that planning
   requires a worker session with companion access.
 
 ### Choosing the Right Mode

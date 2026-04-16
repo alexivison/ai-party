@@ -150,6 +150,15 @@ echo "--- test-transport-role-routing.sh ---"
 SESSION_NEW="party-transport-new-$$"
 SESSION_OLD="party-transport-old-$$"
 
+assert "claude agent-transport companion script is a symlink" \
+  '[ -L "$REPO_ROOT/claude/skills/agent-transport/scripts/tmux-companion.sh" ]'
+assert "claude agent-transport primary script is a symlink" \
+  '[ -L "$REPO_ROOT/claude/skills/agent-transport/scripts/tmux-primary.sh" ]'
+assert "codex agent-transport companion script is a symlink" \
+  '[ -L "$REPO_ROOT/codex/skills/agent-transport/scripts/tmux-companion.sh" ]'
+assert "codex agent-transport primary script is a symlink" \
+  '[ -L "$REPO_ROOT/codex/skills/agent-transport/scripts/tmux-primary.sh" ]'
+
 echo ""
 echo "  === tmux-primary.sh ==="
 
@@ -228,27 +237,6 @@ export MOCK_PANES_0=$'0 codex\n1 claude\n2 shell'
 > "$MOCK_LOG"
 bash "$REPO_ROOT/session/party-relay.sh" --companion "$SESSION_OLD" "legacy ping" >/dev/null
 assert_log "${SESSION_OLD}:0.0" "legacy ping"
-
-echo ""
-echo "  === legacy wrappers ==="
-
-export MOCK_WINDOW_LIST=$'0\n1'
-export MOCK_PANES_0=$'0 companion'
-export MOCK_PANES_1=$'0 tracker\n1 primary\n2 shell'
-> "$MOCK_LOG"
-run_and_capture "$SESSION_NEW" bash "$REPO_ROOT/claude/skills/codex-transport/scripts/tmux-codex.sh" --prompt "wrapper ping" /tmp/work
-assert_log "${SESSION_NEW}:0.0" "[PRIMARY] cd '/tmp/work' && wrapper ping"
-
-> "$MOCK_LOG"
-run_and_capture "$SESSION_NEW" bash "$REPO_ROOT/codex/skills/claude-transport/scripts/tmux-claude.sh" "Task complete. Response at: /tmp/wrapper.toon"
-assert_log "${SESSION_NEW}:1.1" "[COMPANION] Task complete. Response at: /tmp/wrapper.toon"
-
-echo ""
-echo "  === party-relay.sh --wizard alias ==="
-
-> "$MOCK_LOG"
-bash "$REPO_ROOT/session/party-relay.sh" --wizard "$SESSION_NEW" "alias ping" >/dev/null
-assert_log "${SESSION_NEW}:0.0" "alias ping"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

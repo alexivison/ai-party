@@ -12,7 +12,6 @@
 #   party-relay.sh --spawn [--prompt "..."] "title" # spawn a new worker
 #   party-relay.sh --file <path> <worker-id>         # send file pointer to worker
 #   party-relay.sh --companion <worker-id> "message" # send raw text to worker's companion pane
-#   party-relay.sh --wizard <worker-id> "message"    # legacy alias for --companion
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -56,7 +55,6 @@ Usage:
   party-relay.sh --spawn [--prompt "text"] "title"
   party-relay.sh --file <path> <worker-id>         # send file pointer to worker
   party-relay.sh --companion <worker-id> "msg"     # send raw text to worker's companion pane
-  party-relay.sh --wizard <worker-id> "msg"        # legacy alias for --companion
 EOF
 }
 
@@ -118,7 +116,7 @@ case "$1" in
     fi
     exec "${PARTY_CLI_CMD[@]}" relay "$_file_worker" "Read and follow the instructions in $_file_path. Act on them now, then report back with results."
     ;;
-  --companion|--wizard)
+  --companion)
     _load_transport_helpers
     _relay_mode="$1"
     shift

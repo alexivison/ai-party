@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for companion-trace.sh.
 # Single-phase model: companion evidence is created directly from
-# CODEX APPROVED + CODEX_REVIEW_RAN. No intermediate run evidence.
+# COMPANION APPROVED + COMPANION_REVIEW_RAN. No intermediate run evidence.
 #
 # Usage: bash ~/.claude/hooks/tests/test-codex-trace.sh
 
@@ -118,7 +118,7 @@ setup_repo
 
 echo "=== review-complete: APPROVED creates codex evidence directly (object response) ==="
 clean_evidence
-COMBINED_STDOUT=$'CODEX_REVIEW_RAN\nCODEX APPROVED'
+COMBINED_STDOUT=$'COMPANION_REVIEW_RAN\nCOMPANION APPROVED'
 run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' "$COMBINED_STDOUT")"
 assert "APPROVED → codex evidence created" 'has_evidence "codex"'
 
@@ -154,27 +154,27 @@ assert "Missing party-cli → codex evidence created" 'has_evidence "codex"'
 
 echo "=== review-complete: REQUEST_CHANGES → no codex evidence ==="
 clean_evidence
-RC_STDOUT=$'CODEX_REVIEW_RAN\nCODEX REQUEST_CHANGES'
+RC_STDOUT=$'COMPANION_REVIEW_RAN\nCOMPANION REQUEST_CHANGES'
 run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' "$RC_STDOUT")"
 assert "REQUEST_CHANGES → no codex evidence" '! has_evidence "codex"'
 
-# ═══ --review-complete without CODEX_REVIEW_RAN sentinel ═════════════════════
+# ═══ --review-complete without COMPANION_REVIEW_RAN ══════════════════════════
 
-echo "=== review-complete: CODEX APPROVED without CODEX_REVIEW_RAN → no evidence ==="
+echo "=== review-complete: COMPANION APPROVED without COMPANION_REVIEW_RAN → no evidence ==="
 clean_evidence
-run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' 'CODEX APPROVED')"
+run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' 'COMPANION APPROVED')"
 assert "APPROVED without review-ran sentinel → no codex evidence" '! has_evidence "codex"'
 
-echo "=== review-complete: CODEX_REVIEW_RAN alone → no codex evidence ==="
+echo "=== review-complete: COMPANION_REVIEW_RAN alone → no codex evidence ==="
 clean_evidence
-run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' 'CODEX_REVIEW_RAN')"
+run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' 'COMPANION_REVIEW_RAN')"
 assert "Review-ran alone → no codex evidence" '! has_evidence "codex"'
 
 # ═══ --plan-review (advisory only) ════════════════════════════════════════════
 
 echo "=== plan-review: does not create evidence ==="
 clean_evidence
-run_hook "$(bash_input_obj 'tmux-companion.sh --plan-review PLAN.md /tmp/work' 'CODEX_PLAN_REVIEW_REQUESTED')"
+run_hook "$(bash_input_obj 'tmux-companion.sh --plan-review PLAN.md /tmp/work' 'COMPANION_PLAN_REVIEW_REQUESTED')"
 assert "Plan-review → no codex evidence" '! has_evidence "codex"'
 
 # ═══ Exit code extraction ════════════════════════════════════════════════════
@@ -184,7 +184,7 @@ clean_evidence
 INPUT=$(jq -cn \
   --arg sid "$SESSION" \
   --arg cwd "$TMPDIR_BASE" \
-  '{tool_name:"Bash",tool_input:{command:"tmux-companion.sh --review-complete /tmp/f.toon"},tool_response:{stdout:"CODEX_REVIEW_RAN\nCODEX APPROVED",stderr:""},tool_exit_code:1,session_id:$sid,cwd:$cwd}')
+  '{tool_name:"Bash",tool_input:{command:"tmux-companion.sh --review-complete /tmp/f.toon"},tool_response:{stdout:"COMPANION_REVIEW_RAN\nCOMPANION APPROVED",stderr:""},tool_exit_code:1,session_id:$sid,cwd:$cwd}')
 echo "$INPUT" | bash "$HOOK" 2>/dev/null || true
 assert "tool_exit_code=1 → no evidence" '! has_evidence "codex"'
 
@@ -197,7 +197,7 @@ assert "tool_response.exit_code=1 → no evidence" '! has_evidence "codex"'
 
 echo "=== Guard: Non-tmux command ignored ==="
 clean_evidence
-run_hook "$(bash_input_obj 'echo CODEX_REVIEW_RAN' "$COMBINED_STDOUT")"
+run_hook "$(bash_input_obj 'echo COMPANION_REVIEW_RAN' "$COMBINED_STDOUT")"
 assert "Non-tmux → no evidence" '! has_evidence "codex"'
 
 echo "=== Guard: Invalid JSON fails open ==="
@@ -209,7 +209,7 @@ echo "=== Guard: Missing session_id → no evidence ==="
 clean_evidence
 INPUT=$(jq -cn \
   --arg cwd "$TMPDIR_BASE" \
-  '{tool_name:"Bash",tool_input:{command:"tmux-companion.sh --review-complete /tmp/f.toon"},tool_response:{stdout:"CODEX_REVIEW_RAN\nCODEX APPROVED",stderr:""},cwd:$cwd}')
+  '{tool_name:"Bash",tool_input:{command:"tmux-companion.sh --review-complete /tmp/f.toon"},tool_response:{stdout:"COMPANION_REVIEW_RAN\nCOMPANION APPROVED",stderr:""},cwd:$cwd}')
 echo "$INPUT" | bash "$HOOK" 2>/dev/null || true
 assert "No session_id → no evidence" '! has_evidence "codex"'
 
@@ -217,7 +217,7 @@ assert "No session_id → no evidence" '! has_evidence "codex"'
 
 echo "=== Workflow: APPROVED verdict → codex evidence ==="
 clean_evidence
-APPROVED_STDOUT=$'CODEX_REVIEW_RAN\nCODEX APPROVED'
+APPROVED_STDOUT=$'COMPANION_REVIEW_RAN\nCOMPANION APPROVED'
 run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' "$APPROVED_STDOUT")"
 assert "Workflow: codex evidence created" 'has_evidence "codex"'
 
@@ -256,11 +256,11 @@ OVERRIDE_BAD='TRIAGE_OVERRIDE codex | Trying to bypass'
 run_hook "$(bash_input_obj 'tmux-companion.sh --triage-override codex "Trying to bypass"' "$OVERRIDE_BAD")"
 assert "Invalid type → no codex evidence" '! has_evidence "codex"'
 
-echo "=== triage-override: combined with CODEX_REVIEW_RAN ==="
+echo "=== triage-override: combined with COMPANION_REVIEW_RAN ==="
 clean_evidence
 # Critic must have run first
 append_evidence "$SESSION" "minimizer" "REQUEST_CHANGES" "$TMPDIR_BASE"
-COMBINED_OVERRIDE=$'CODEX_REVIEW_RAN\nTRIAGE_OVERRIDE minimizer | Rebased code from PR #65315'
+COMBINED_OVERRIDE=$'COMPANION_REVIEW_RAN\nTRIAGE_OVERRIDE minimizer | Rebased code from PR #65315'
 run_hook "$(bash_input_obj 'tmux-companion.sh --review-complete /tmp/f.toon' "$COMBINED_OVERRIDE")"
 assert "Combined → minimizer override evidence" 'has_evidence "minimizer"'
 
@@ -282,7 +282,7 @@ summary:
   VERDICT: REQUEST_CHANGES
 TOON
 
-CODEX_RC_RESP=$'CODEX_REVIEW_RAN\nCODEX REQUEST_CHANGES'
+CODEX_RC_RESP=$'COMPANION_REVIEW_RAN\nCOMPANION REQUEST_CHANGES'
 run_hook "$(bash_input_obj "tmux-companion.sh --review-complete $TOON_FILE" "$CODEX_RC_RESP")"
 
 CODEX_FINDINGS=$(jq -s '[.[] | select(.event == "finding_raised" and .source == "codex")] | length' "$METRICS_FILE" 2>/dev/null || echo 0)
@@ -297,7 +297,7 @@ assert "Codex triage: blocking finding triaged as fix" '[ "$CODEX_BLOCK_FIX" -eq
 echo "=== Codex resolution: APPROVED resolves prior findings ==="
 clean_evidence
 # Write approval response
-CODEX_APPR_RESP=$'CODEX_REVIEW_RAN\nCODEX APPROVED'
+CODEX_APPR_RESP=$'COMPANION_REVIEW_RAN\nCOMPANION APPROVED'
 run_hook "$(bash_input_obj "tmux-companion.sh --review-complete $TOON_FILE" "$CODEX_APPR_RESP")"
 
 CODEX_RESOLVED=$(jq -s '[.[] | select(.event == "resolved" and .resolution == "fixed")] | length' "$METRICS_FILE" 2>/dev/null || echo 0)
