@@ -424,13 +424,26 @@ func TestClaudeTranscriptPath_SlugifiesCwd(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	got, err := NewClaude(AgentConfig{}).TranscriptPath("/home/user/ai-party", "abc-123")
-	if err != nil {
-		t.Fatalf("TranscriptPath: %v", err)
+	cases := []struct {
+		name string
+		cwd  string
+		slug string
+	}{
+		{"plain path", "/home/user/ai-party", "-home-user-ai-party"},
+		{"dotted dir", "/home/user/my.project", "-home-user-my-project"},
+		{"underscore dir", "/Users/alice/code/ai_party", "-Users-alice-code-ai-party"},
+		{"space in dir", "/tmp/my project", "-tmp-my-project"},
+		{"dotfile cwd", "/home/user/.config/app", "-home-user--config-app"},
 	}
-	want := filepath.Join(home, ".claude", "projects", "-home-user-ai-party", "abc-123.jsonl")
-	if got != want {
-		t.Fatalf("TranscriptPath = %q, want %q", got, want)
+	for _, tc := range cases {
+		got, err := NewClaude(AgentConfig{}).TranscriptPath(tc.cwd, "abc-123")
+		if err != nil {
+			t.Fatalf("%s: TranscriptPath: %v", tc.name, err)
+		}
+		want := filepath.Join(home, ".claude", "projects", tc.slug, "abc-123.jsonl")
+		if got != want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, want)
+		}
 	}
 }
 

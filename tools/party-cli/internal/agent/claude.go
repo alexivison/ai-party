@@ -80,8 +80,26 @@ func (c *Claude) TranscriptPath(cwd, resumeID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("user home: %w", err)
 	}
-	slug := strings.ReplaceAll(cwd, "/", "-")
-	return filepath.Join(home, ".claude", "projects", slug, resumeID+".jsonl"), nil
+	return filepath.Join(home, ".claude", "projects", claudeProjectSlug(cwd), resumeID+".jsonl"), nil
+}
+
+// claudeProjectSlug mirrors Claude Code's own project-directory naming:
+// every non-alphanumeric character in the absolute cwd becomes "-". That
+// includes "/", ".", "_", " " and anything else, so cwds like
+// /home/user/my.project or /Users/alice/code/ai_party resolve to the
+// right subdirectory under ~/.claude/projects/.
+func claudeProjectSlug(cwd string) string {
+	var b strings.Builder
+	b.Grow(len(cwd))
+	for _, r := range cwd {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 func (c *Claude) PreLaunchSetup(ctx context.Context, client TmuxClient, session string) error {
