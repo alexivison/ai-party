@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # party-lib.sh — Shared helpers for party session discovery and tmux transport
-# Sourced by thin wrappers (party.sh, party-relay.sh, etc.) and tmux-codex.sh
+# Sourced by thin wrappers (party.sh, party-relay.sh, etc.) and the role-based
+# tmux transport scripts.
 #
 # Manifest CRUD (create, set_field, get_field, add_worker, remove_worker)
 # has been retired — party-cli (Go) is the sole manifest writer.
@@ -17,6 +18,50 @@ party_state_file() {
 party_runtime_dir() {
   local session="${1:?Usage: party_runtime_dir SESSION_NAME}"
   printf '/tmp/%s\n' "$session"
+}
+
+# Write the companion status file atomically via .tmp + mv.
+# The Codex runtime still owns codex-status.json, so companion helpers write that file.
+# Usage: write_codex_status RUNTIME_DIR STATE [TARGET] [MODE] [VERDICT] [ERROR]
+write_codex_status() {
+  local runtime_dir="${1:?Usage: write_codex_status RUNTIME_DIR STATE [TARGET] [MODE] [VERDICT] [ERROR]}"
+  local state="${2:?Usage: write_codex_status RUNTIME_DIR STATE}"
+  local target="${3:-}"
+  local mode="${4:-}"
+  local verdict="${5:-}"
+  local error_msg="${6:-}"
+
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  local tmp_file="$runtime_dir/codex-status.json.tmp"
+  local final_file="$runtime_dir/codex-status.json"
+
+  mkdir -p "$runtime_dir"
+
+  # Build JSON with jq for safety (no injection from shell vars)
+  jq -n \
+    --arg state "$state" \
+    --arg target "$target" \
+    --arg mode "$mode" \
+    --arg verdict "$verdict" \
+    --arg error "$error_msg" \
+    --arg started_at "$([ "$state" = "working" ] && echo "$now" || echo "")" \
+    --arg finished_at "$([ "$state" != "working" ] && echo "$now" || echo "")" \
+    '{state: $state} +
+     (if $target != "" then {target: $target} else {} end) +
+     (if $mode != "" then {mode: $mode} else {} end) +
+     (if $verdict != "" then {verdict: $verdict} else {} end) +
+     (if $started_at != "" then {started_at: $started_at} else {} end) +
+     (if $finished_at != "" then {finished_at: $finished_at} else {} end) +
+     (if $error != "" then {error: $error} else {} end)' \
+    > "$tmp_file"
+
+  mv "$tmp_file" "$final_file"
+}
+
+write_companion_status() {
+  write_codex_status "$@"
 }
 
 # ---------------------------------------------------------------------------
@@ -72,7 +117,7 @@ party_transport_response_handoff_instruction() {
   local response_path="${2:?Usage: party_transport_response_handoff_instruction NOTIFY_SCRIPT RESPONSE_PATH}"
   local completion_message
   completion_message="$(party_transport_response_completion_message "$response_path")"
-  printf '%s' "Do not poll the response file. Wait for the tmux completion notice, then read it. When done, run: $notify_script --prompt \"$completion_message\" \"\$(pwd)\""
+  printf '%s' "Do not poll the response file. Wait for the tmux completion notice, then read it. When done, run: $notify_script \"$completion_message\""
 }
 
 # Attach or switch to a party session. Uses switch-client inside tmux,
@@ -396,8 +441,19 @@ party_role_message_prefix() {
 }
 
 # ---------------------------------------------------------------------------
-# Pane resolution helpers
+# Layout mode helpers
 # ---------------------------------------------------------------------------
+
+# Returns the active layout mode: "sidebar" or "classic".
+# sidebar: hidden Codex window 0 + workspace window 1 (party-cli | Claude | Shell)
+# classic: single window with Codex | Claude | Shell (original layout)
+party_layout_mode() {
+  local mode="${PARTY_LAYOUT:-sidebar}"
+  case "$mode" in
+    sidebar) echo "sidebar" ;;
+    *)       echo "classic" ;;
+  esac
+}
 
 # Resolve the primary pane target in a session.
 party_primary_pane_target() {
@@ -406,10 +462,16 @@ party_primary_pane_target() {
 }
 
 # Resolve the companion pane target via role metadata.
-# Rejects lookups in no-companion sessions.
+# This works across classic/sidebar layouts and rejects no-companion sessions.
 party_companion_pane_target() {
   local session="${1:?Usage: party_companion_pane_target SESSION}"
   party_role_pane_target "$session" "companion"
+}
+
+# Backward-compatible wrapper for older callers.
+party_codex_pane_target() {
+  local session="${1:?Usage: party_codex_pane_target SESSION}"
+  party_companion_pane_target "$session"
 }
 
 # Resolve party-cli as an array-safe command for CLI delegation.

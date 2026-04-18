@@ -879,6 +879,59 @@ func TestDelete_InvalidName(t *testing.T) {
 // Promote tests
 // ---------------------------------------------------------------------------
 
+// TestPromote_Classic covers the legacy single-window layout with the
+// old codex/claude pane-role tags — exercises the fallback mapping in
+// _party_role_fallback alongside the single-window guard in Promote.
+func TestPromote_Classic(t *testing.T) {
+	t.Parallel()
+	svc, runner := setupService(t)
+
+	runner.sessions["party-worker"] = true
+	createTestManifest(t, svc.Store, "party-worker", "worker", t.TempDir(), "")
+
+	// Set up a legacy classic layout to prove companion->codex fallback still works.
+	runner.paneRoles["party-worker:0.0"] = "codex"
+	runner.paneRoles["party-worker:0.1"] = "claude"
+	runner.paneRoles["party-worker:0.2"] = "shell"
+
+	if err := svc.Promote(t.Context(), "party-worker"); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	// Verify manifest updated
+	m, err := svc.Store.Read("party-worker")
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if m.SessionType != "master" {
+		t.Fatalf("expected master, got %q", m.SessionType)
+	}
+	if m.WindowName != "party (worker) [master]" {
+		t.Fatalf("expected manifest WindowName updated, got %q", m.WindowName)
+	}
+	if len(m.Agents) != 1 || m.Agents[0].Role != "primary" || m.Agents[0].Name != "claude" {
+		t.Fatalf("expected only primary agent kept after promote, got %+v", m.Agents)
+	}
+
+	// Verify companion pane replaced with tracker
+	if runner.paneRoles["party-worker:0.0"] != "tracker" {
+		t.Fatalf("expected tracker role in pane 0.0, got %q", runner.paneRoles["party-worker:0.0"])
+	}
+
+	// Verify window renamed with [master] indicator
+	if got := runner.windowNames["party-worker:0"]; got != "party (worker) [master]" {
+		t.Errorf("expected window renamed to %q, got %q", "party (worker) [master]", got)
+	}
+
+	provider, err := svc.Registry.Get("claude")
+	if err != nil {
+		t.Fatalf("registry get claude: %v", err)
+	}
+	if !runner.hasSendText("party-worker:0.1", provider.MasterPrompt()) {
+		t.Fatalf("expected master prompt sent to primary pane")
+	}
+}
+
 func TestPromote_Sidebar(t *testing.T) {
 	t.Parallel()
 	svc, runner := setupService(t)

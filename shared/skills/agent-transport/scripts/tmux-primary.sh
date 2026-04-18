@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# tmux-claude.sh — The Wizard's direct interface to Claude via tmux
-# Replaces call_claude.sh
+# tmux-primary.sh — Shared transport for sending messages to the primary agent via tmux
 set -euo pipefail
 
-MESSAGE="${1:?Usage: tmux-claude.sh \"message for Claude\"}"
+MESSAGE="${1:?Usage: tmux-primary.sh \"message for the primary agent\"}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../../../../session/party-lib.sh"
 discover_session
 
@@ -26,13 +25,13 @@ augment_primary_request() {
     return
   fi
 
-  local notify_script="$HOME/.claude/skills/codex-transport/scripts/tmux-codex.sh"
+  local notify_script="$HOME/.codex/skills/agent-transport/scripts/tmux-primary.sh"
   local handoff_instruction
   handoff_instruction="$(party_transport_response_handoff_instruction "$notify_script" "$response_path")"
   printf '%s — %s\n' "$message" "$handoff_instruction"
 }
 
-# Register Codex's thread ID with the party session (write-once)
+# Register the default companion thread ID with the party session (write-once).
 if [[ -n "${CODEX_THREAD_ID:-}" && ! -s "$STATE_DIR/codex-thread-id" ]]; then
   printf '%s\n' "$CODEX_THREAD_ID" > "$STATE_DIR/codex-thread-id"
   tmux set-environment -t "$SESSION_NAME" CODEX_THREAD_ID "$CODEX_THREAD_ID" 2>/dev/null || true
@@ -81,13 +80,32 @@ fi
 
 # Send with exit-76 handling: keys sent but buffer check failed → treat as delivered
 _send_rc=0
-tmux_send "$PEER_PANE" "$SENDER_PREFIX $MESSAGE" "tmux-claude.sh" || _send_rc=$?
+tmux_send "$PEER_PANE" "$SENDER_PREFIX $MESSAGE" "tmux-primary.sh" || _send_rc=$?
 
 if [[ $_send_rc -eq 0 || $_send_rc -eq 76 ]]; then
   if [[ $_send_rc -eq 76 ]]; then
     echo "tmux_send: delivery unconfirmed (capture-pane miss)" >&2
   fi
-  echo "CLAUDE_MESSAGE_SENT"
+  if $_is_completion && [[ "$sender_role" == "companion" ]]; then
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
+    _verdict=""
+    _findings_file="$(party_transport_completion_path "$MESSAGE" 2>/dev/null || true)"
+    if [[ -n "$_findings_file" && -f "$_findings_file" ]]; then
+      if grep -q '^VERDICT: APPROVED' "$_findings_file" 2>/dev/null; then
+        _verdict="APPROVE"
+      elif grep -q '^VERDICT: REQUEST_CHANGES' "$_findings_file" 2>/dev/null; then
+        _verdict="REQUEST_CHANGES"
+      elif grep -q '^VERDICT: NEEDS_DISCUSSION' "$_findings_file" 2>/dev/null; then
+        _verdict="NEEDS_DISCUSSION"
+      fi
+    fi
+    write_companion_status "$RUNTIME_DIR" "idle" "" "" "$_verdict"
+  fi
+  echo "PRIMARY_MESSAGE_SENT"
 else
-  echo "CLAUDE_MESSAGE_DROPPED"
+  if $_is_completion && [[ "$sender_role" == "companion" ]]; then
+    RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"
+    write_companion_status "$RUNTIME_DIR" "error" "" "" "" "completion delivery failed: primary pane busy"
+  fi
+  echo "PRIMARY_MESSAGE_DROPPED"
 fi
