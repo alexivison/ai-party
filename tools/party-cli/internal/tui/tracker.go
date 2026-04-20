@@ -67,20 +67,30 @@ type CurrentSessionDetail struct {
 }
 
 // SessionFetcher loads all session data for the tracker.
-type SessionFetcher func(current SessionInfo) (TrackerSnapshot, error)
+type SessionFetcher func(current SessionInfo, selectedID string) (TrackerSnapshot, error)
+
+// snapshotMsg carries an asynchronously fetched tracker snapshot back to Update.
+type snapshotMsg struct {
+	seq      int
+	snapshot TrackerSnapshot
+	err      error
+}
 
 // TrackerModel is the Bubble Tea sub-model for the unified tracker view.
 type TrackerModel struct {
-	current  SessionInfo
-	sessions []SessionRow
-	detail   CurrentSessionDetail
-	cursor   int
-	mode     trackerMode
-	input    textinput.Model
-	width    int
-	height   int
-	lastErr  error
-	blinkOn  bool
+	current       SessionInfo
+	sessions      []SessionRow
+	detail        CurrentSessionDetail
+	cursor        int
+	mode          trackerMode
+	input         textinput.Model
+	width         int
+	height        int
+	lastErr       error
+	blinkOn       bool
+	refreshing    bool
+	refreshQueued bool
+	refreshSeq    int
 
 	manifestJSON string
 	manifestID   string
@@ -112,21 +122,44 @@ func (tm *TrackerModel) SetCurrent(current SessionInfo) {
 	tm.current = current
 }
 
-// refreshSessions reloads the session list and clamps the cursor.
-func (tm *TrackerModel) refreshSessions() {
+func (tm *TrackerModel) requestRefresh() tea.Cmd {
 	if tm.fetcher == nil {
-		return
+		return nil
+	}
+	if tm.refreshing {
+		tm.refreshQueued = true
+		return nil
 	}
 
-	selectedID := ""
-	if row, ok := tm.selectedSession(); ok {
-		selectedID = row.ID
-	}
+	tm.refreshing = true
+	tm.refreshSeq++
 
-	snapshot, err := tm.fetcher(tm.current)
-	if err != nil {
-		tm.lastErr = err
-		return
+	seq := tm.refreshSeq
+	current := tm.current
+	selectedID := tm.selectedSessionID()
+	if selectedID == "" {
+		selectedID = tm.current.ID
+	}
+	fetcher := tm.fetcher
+
+	return func() tea.Msg {
+		snapshot, err := fetcher(current, selectedID)
+		return snapshotMsg{seq: seq, snapshot: snapshot, err: err}
+	}
+}
+
+func (tm *TrackerModel) applySnapshot(snapshot TrackerSnapshot) {
+	selectedID := tm.selectedSessionID()
+	previousSnippets := make(map[string]string, len(tm.sessions))
+	for _, row := range tm.sessions {
+		if row.Snippet != "" {
+			previousSnippets[row.ID] = row.Snippet
+		}
+	}
+	for i := range snapshot.Sessions {
+		if snapshot.Sessions[i].Snippet == "" {
+			snapshot.Sessions[i].Snippet = previousSnippets[snapshot.Sessions[i].ID]
+		}
 	}
 
 	tm.sessions = snapshot.Sessions
@@ -146,6 +179,25 @@ func (tm *TrackerModel) refreshSessions() {
 	if tm.cursor >= len(tm.sessions) {
 		tm.cursor = max(0, len(tm.sessions)-1)
 	}
+}
+
+func (tm *TrackerModel) finishRefresh(msg snapshotMsg) tea.Cmd {
+	if msg.seq != tm.refreshSeq {
+		return nil
+	}
+
+	tm.refreshing = false
+	if msg.err != nil {
+		tm.lastErr = msg.err
+	} else {
+		tm.applySnapshot(msg.snapshot)
+	}
+
+	if tm.refreshQueued {
+		tm.refreshQueued = false
+		return tm.requestRefresh()
+	}
+	return nil
 }
 
 // Update handles key messages for the tracker sub-model.
@@ -175,17 +227,19 @@ func (tm TrackerModel) updateNormal(msg tea.KeyMsg) (TrackerModel, tea.Cmd) {
 	case "j", "down":
 		if tm.cursor < len(tm.sessions)-1 {
 			tm.cursor++
+			return tm, tm.requestRefresh()
 		}
 
 	case "k", "up":
 		if tm.cursor > 0 {
 			tm.cursor--
+			return tm, tm.requestRefresh()
 		}
 
 	case "enter":
 		if row, ok := tm.selectedSession(); ok && row.Status == "active" && tm.actions != nil {
 			tm.lastErr = tm.actions.Attach(ctx, tm.current.ID, row.ID)
-			tm.refreshSessions()
+			return tm, delayedRefreshCmd()
 		}
 
 	case "r":
@@ -220,13 +274,13 @@ func (tm TrackerModel) updateNormal(msg tea.KeyMsg) (TrackerModel, tea.Cmd) {
 	case "x":
 		if row, ok := tm.selectedSession(); ok && tm.actions != nil {
 			tm.lastErr = tm.actions.Stop(ctx, row.ParentID, row.ID)
-			tm.refreshSessions()
+			return tm, delayedRefreshCmd()
 		}
 
 	case "d":
 		if row, ok := tm.selectedSession(); ok && tm.actions != nil {
 			tm.lastErr = tm.actions.Delete(ctx, row.ParentID, row.ID)
-			tm.refreshSessions()
+			return tm, delayedRefreshCmd()
 		}
 
 	case "m":
@@ -272,7 +326,7 @@ func (tm TrackerModel) updateInput(msg tea.KeyMsg) (TrackerModel, tea.Cmd) {
 		tm.mode = trackerModeNormal
 		tm.relayTargetID = ""
 		tm.input.Blur()
-		return tm, tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg { return refreshMsg{} })
+		return tm, delayedRefreshCmd()
 	}
 
 	var cmd tea.Cmd
@@ -708,6 +762,14 @@ func (tm TrackerModel) selectedSession() (SessionRow, bool) {
 	return tm.sessions[tm.cursor], true
 }
 
+func (tm TrackerModel) selectedSessionID() string {
+	row, ok := tm.selectedSession()
+	if !ok {
+		return ""
+	}
+	return row.ID
+}
+
 func (tm TrackerModel) currentIsMaster() bool {
 	return tm.currentSessionType() == "master"
 }
@@ -886,4 +948,8 @@ func sessionTitleIcon(agentName string) string {
 	default:
 		return ""
 	}
+}
+
+func delayedRefreshCmd() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg { return refreshMsg{} })
 }

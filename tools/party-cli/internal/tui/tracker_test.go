@@ -83,7 +83,7 @@ func (f *fakeActions) ManifestJSON(sessionID string) (string, error) {
 }
 
 func snapshotFetcher(snapshot TrackerSnapshot) SessionFetcher {
-	return func(SessionInfo) (TrackerSnapshot, error) {
+	return func(SessionInfo, string) (TrackerSnapshot, error) {
 		return snapshot, nil
 	}
 }
@@ -94,7 +94,7 @@ func newTestTracker(current SessionInfo, snapshot TrackerSnapshot, actions Track
 	// Tall enough that boxed session cards (≈7 lines each) for multiple
 	// sessions fit without pane-clipping elided lines.
 	tm.height = 80
-	tm.refreshSessions()
+	tm.applySnapshot(snapshot)
 	return tm
 }
 
@@ -124,12 +124,12 @@ func TestTrackerViewShowsHierarchy(t *testing.T) {
 			{ID: "party-1236", Title: "solo task", Cwd: "/tmp/solo", Status: "active", SessionType: "standalone", PrimaryAgent: "codex", Snippet: "❯ npm test\n⎿ 42 passed"},
 		},
 		Current: CurrentSessionDetail{
-			ID:            "party-1230",
-			Title:         "Project Alpha",
-			SessionType:   "master",
-			Cwd:           "~/Code/project-b",
-			WorkerCount:   2,
-			PrimaryAgent:  "claude",
+			ID:           "party-1230",
+			Title:        "Project Alpha",
+			SessionType:  "master",
+			Cwd:          "~/Code/project-b",
+			WorkerCount:  2,
+			PrimaryAgent: "claude",
 		},
 	}
 
@@ -518,14 +518,12 @@ func TestTrackerRefreshSessionsFallsBackToCurrentWhenSelectionDisappears(t *test
 		},
 	}, &fakeActions{})
 	tm.cursor = 1
-	tm.fetcher = snapshotFetcher(TrackerSnapshot{
+	tm.applySnapshot(TrackerSnapshot{
 		Sessions: []SessionRow{
 			{ID: "party-current", Title: "current", Status: "active", SessionType: "standalone", IsCurrent: true},
 			{ID: "party-other", Title: "other", Status: "active", SessionType: "standalone"},
 		},
 	})
-
-	tm.refreshSessions()
 
 	row, ok := tm.selectedSession()
 	if !ok || row.ID != "party-current" {

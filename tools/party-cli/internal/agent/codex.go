@@ -28,6 +28,8 @@ const codexWorkerPrompt = "This is a worker session. You are a worker in a party
 	"(3) Worker tool cheatsheet: use `party-cli report` to reply to the master, `party-cli read <session-id>` when asked to inspect another session, " +
 	"and `party-cli workers` if you need a quick session list for context."
 
+const codexRecentRolloutWindowDays = 7
+
 // Codex implements the built-in Codex provider.
 type Codex struct {
 	cli string
@@ -165,7 +167,7 @@ func (c *Codex) RecoverResumeID(cwd, createdAt string) (string, error) {
 	created := parseCodexTimestamp(createdAt)
 	var best codexResumeCandidate
 	found := false
-	for _, path := range recentCodexRollouts(home, c.currentTime()) {
+	for _, path := range recentCodexRollouts(home, c.currentTime(), created) {
 		meta, err := readCodexRolloutMeta(path)
 		if err != nil || meta.Type != "session_meta" {
 			continue
@@ -333,16 +335,38 @@ func readCodexRolloutMeta(path string) (codexRolloutMeta, error) {
 	return meta, nil
 }
 
-func recentCodexRollouts(home string, now time.Time) []string {
-	seen := make(map[string]struct{}, 2)
+func recentCodexRollouts(home string, now, created time.Time) []string {
+	days := 2
+	if !created.IsZero() {
+		ageDays := int(now.Sub(created).Hours() / 24)
+		if ageDays < 0 {
+			ageDays = 0
+		}
+		if ageDays+1 > days {
+			days = ageDays + 1
+		}
+	}
+	if days > codexRecentRolloutWindowDays {
+		days = codexRecentRolloutWindowDays
+	}
+	return recentCodexRolloutPaths(home, now, days, "rollout-*.jsonl")
+}
+
+func recentCodexRolloutPaths(home string, now time.Time, days int, pattern string) []string {
+	if days < 1 {
+		days = 1
+	}
+
+	seen := make(map[string]struct{}, days)
 	out := make([]string, 0, 16)
-	for _, day := range []time.Time{now, now.AddDate(0, 0, -1)} {
+	for dayOffset := 0; dayOffset < days; dayOffset++ {
+		day := now.AddDate(0, 0, -dayOffset)
 		dir := filepath.Join(home, ".codex", "sessions", day.Format("2006"), day.Format("01"), day.Format("02"))
 		if _, ok := seen[dir]; ok {
 			continue
 		}
 		seen[dir] = struct{}{}
-		matches, _ := filepath.Glob(filepath.Join(dir, "rollout-*.jsonl"))
+		matches, _ := filepath.Glob(filepath.Join(dir, pattern))
 		out = append(out, matches...)
 	}
 	return out

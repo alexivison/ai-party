@@ -37,6 +37,39 @@ func (r *recordingRunner) Run(ctx context.Context, args ...string) (string, erro
 	return r.fn(ctx, args...)
 }
 
+type recoveringAgent struct {
+	name       string
+	resumeKey  string
+	recoverFn  func(cwd, createdAt string) (string, error)
+	recoveries int
+}
+
+func (a *recoveringAgent) Name() string                  { return a.name }
+func (a *recoveringAgent) DisplayName() string           { return a.name }
+func (a *recoveringAgent) Binary() string                { return a.name }
+func (a *recoveringAgent) ResumeKey() string             { return a.resumeKey }
+func (a *recoveringAgent) ResumeFileName() string        { return a.resumeKey }
+func (a *recoveringAgent) EnvVar() string                { return "" }
+func (a *recoveringAgent) MasterPrompt() string          { return "" }
+func (a *recoveringAgent) WorkerPrompt() string          { return "" }
+func (a *recoveringAgent) BinaryEnvVar() string          { return "" }
+func (a *recoveringAgent) FallbackPath() string          { return "" }
+func (a *recoveringAgent) BuildCmd(agent.CmdOpts) string { return "" }
+func (a *recoveringAgent) FilterPaneLines(string, int) []string {
+	return nil
+}
+func (a *recoveringAgent) IsActive(string, string) (bool, error) { return false, nil }
+func (a *recoveringAgent) PreLaunchSetup(context.Context, agent.TmuxClient, string) error {
+	return nil
+}
+func (a *recoveringAgent) RecoverResumeID(cwd, createdAt string) (string, error) {
+	a.recoveries++
+	if a.recoverFn == nil {
+		return "", nil
+	}
+	return a.recoverFn(cwd, createdAt)
+}
+
 func allDeadRunner() *mockRunner {
 	return &mockRunner{fn: func(_ context.Context, args ...string) (string, error) {
 		if len(args) >= 1 && args[0] == "kill-session" {
@@ -132,7 +165,7 @@ func TestLiveSessionFetcherBatchesTmuxQueriesAndUsesShortCaptureTail(t *testing.
 	}}
 	client := tmux.NewClient(runner)
 
-	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-active"})
+	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-active"}, "party-active")
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
@@ -175,6 +208,72 @@ func TestLiveSessionFetcherBatchesTmuxQueriesAndUsesShortCaptureTail(t *testing.
 	}
 	if got := strings.Join(captureArgs, " "); !strings.Contains(got, "-50") {
 		t.Fatalf("expected capture-pane tail to use -50, got %v", captureArgs)
+	}
+}
+
+func TestLiveSessionFetcherCapturesSnippetOnlyForSelectedRow(t *testing.T) {
+	t.Parallel()
+
+	store, err := state.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	for _, manifest := range []state.Manifest{
+		{PartyID: "party-a", Agents: []state.AgentManifest{{Name: "claude", Role: "primary"}}},
+		{PartyID: "party-b", Agents: []state.AgentManifest{{Name: "claude", Role: "primary"}}},
+	} {
+		if err := store.Create(manifest); err != nil {
+			t.Fatalf("create manifest %s: %v", manifest.PartyID, err)
+		}
+	}
+
+	runner := &recordingRunner{fn: func(_ context.Context, args ...string) (string, error) {
+		switch args[0] {
+		case "list-sessions":
+			return "party-a\nparty-b", nil
+		case "list-panes":
+			return "party-a\t1 0 primary\nparty-b\t1 0 primary", nil
+		case "capture-pane":
+			switch args[2] {
+			case "party-b:1.0":
+				return "⏺ selected snippet\n", nil
+			case "party-a:1.0":
+				return "⏺ unselected snippet\n", nil
+			}
+		}
+		return "", &tmux.ExitError{Code: 1}
+	}}
+	client := tmux.NewClient(runner)
+
+	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-a"}, "party-b")
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+
+	rows := make(map[string]SessionRow, len(snapshot.Sessions))
+	for _, row := range snapshot.Sessions {
+		rows[row.ID] = row
+	}
+	if rows["party-b"].Snippet == "" {
+		t.Fatal("expected selected row snippet to be captured")
+	}
+	if rows["party-a"].Snippet != "" {
+		t.Fatalf("expected non-selected row snippet to remain empty, got %q", rows["party-a"].Snippet)
+	}
+
+	captures := 0
+	var target string
+	for _, call := range runner.calls {
+		if len(call) > 0 && call[0] == "capture-pane" {
+			captures++
+			target = call[2]
+		}
+	}
+	if captures != 1 {
+		t.Fatalf("capture-pane calls: got %d, want 1", captures)
+	}
+	if target != "party-b:1.0" {
+		t.Fatalf("capture-pane target: got %q, want %q", target, "party-b:1.0")
 	}
 }
 
@@ -265,7 +364,7 @@ func TestLiveSessionFetcherDoesNotInventCompanionFromRegistry(t *testing.T) {
 	}
 
 	fetcher := NewLiveSessionFetcher(client, store)
-	snapshot, err := fetcher(SessionInfo{ID: "party-codex", SessionType: "standalone", Manifest: manifest, Registry: registry})
+	snapshot, err := fetcher(SessionInfo{ID: "party-codex", SessionType: "standalone", Manifest: manifest, Registry: registry}, "party-codex")
 	if err != nil {
 		t.Fatalf("fetch sessions: %v", err)
 	}
@@ -301,7 +400,7 @@ func TestLiveSessionFetcherLeavesMasterCompanionEmptyWithoutManifestEntry(t *tes
 		t.Fatalf("new registry: %v", err)
 	}
 
-	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-master", SessionType: "master", Manifest: manifest, Registry: registry})
+	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-master", SessionType: "master", Manifest: manifest, Registry: registry}, "party-master")
 	if err != nil {
 		t.Fatalf("fetch sessions: %v", err)
 	}
@@ -380,7 +479,7 @@ func TestLiveSessionFetcherDetectsClaudeActivityViaManifestExtras(t *testing.T) 
 		t.Fatalf("create manifest: %v", err)
 	}
 
-	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-tool"})
+	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-tool"}, "party-tool")
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
@@ -430,7 +529,7 @@ func TestLiveSessionFetcherSkipsCompanionRolloutRecovery(t *testing.T) {
 		t.Fatalf("create manifest: %v", err)
 	}
 
-	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-claude"})
+	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-claude"}, "party-claude")
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
@@ -475,7 +574,7 @@ func TestLiveSessionFetcherDetectsCodexActivityViaRecoveredResumeID(t *testing.T
 		t.Fatalf("create manifest: %v", err)
 	}
 
-	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-codex"})
+	snapshot, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-codex"}, "party-codex")
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
@@ -517,7 +616,7 @@ func TestLiveSessionFetcherPersistsRecoveredCodexResumeID(t *testing.T) {
 		t.Fatalf("create manifest: %v", err)
 	}
 
-	if _, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-codex"}); err != nil {
+	if _, err := NewLiveSessionFetcher(client, store)(SessionInfo{ID: "party-codex"}, "party-codex"); err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
 
@@ -527,5 +626,41 @@ func TestLiveSessionFetcherPersistsRecoveredCodexResumeID(t *testing.T) {
 	}
 	if got := updated.ExtraString("codex_thread_id"); got != "thr-cached" {
 		t.Fatalf("codex_thread_id: got %q, want %q", got, "thr-cached")
+	}
+}
+
+func TestRecoverResumeIDNegativeCacheHitMissAndTTLExpiry(t *testing.T) {
+	now := time.Date(2026, time.April, 20, 9, 0, 0, 0, time.UTC)
+	cache := newResumeRecoveryNegativeCache(5*time.Minute, func() time.Time { return now })
+	a := &recoveringAgent{
+		name:      "codex",
+		resumeKey: "codex_thread_id",
+	}
+	manifest := state.Manifest{
+		PartyID: "party-cache",
+		Cwd:     "/repo/app",
+		Agents:  []state.AgentManifest{{Name: "codex", Role: "primary"}},
+	}
+
+	if got := recoverResumeIDForWithCache(a, manifest, cache); got != "" {
+		t.Fatalf("first recovery: got %q, want empty", got)
+	}
+	if a.recoveries != 1 {
+		t.Fatalf("recoveries after first miss: got %d, want 1", a.recoveries)
+	}
+
+	if got := recoverResumeIDForWithCache(a, manifest, cache); got != "" {
+		t.Fatalf("cached miss: got %q, want empty", got)
+	}
+	if a.recoveries != 1 {
+		t.Fatalf("recoveries after cached miss: got %d, want 1", a.recoveries)
+	}
+
+	now = now.Add(5*time.Minute + time.Second)
+	if got := recoverResumeIDForWithCache(a, manifest, cache); got != "" {
+		t.Fatalf("expired cache retry: got %q, want empty", got)
+	}
+	if a.recoveries != 2 {
+		t.Fatalf("recoveries after TTL expiry: got %d, want 2", a.recoveries)
 	}
 }
