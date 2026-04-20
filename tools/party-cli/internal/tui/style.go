@@ -87,9 +87,10 @@ var (
 // dimActivityStyle renders the activity dot's "blink off" half — a muted
 // grey that the identity-coloured dot alternates with while the agent is
 // generating.
-var dimActivityStyle = lipgloss.NewStyle().Foreground(palette.ActivityDim)
-
-const selectedRowBgANSI = palette.SelectedRowBgANSI
+var (
+	dimActivityStyle  = lipgloss.NewStyle().Foreground(palette.ActivityDim)
+	selectedRowBgANSI = palette.SelectedRowBgANSI
+)
 
 // Status bar and key badge styles.
 var (

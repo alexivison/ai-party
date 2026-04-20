@@ -14,6 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/anthropics/ai-party/tools/party-cli/internal/palette"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/state"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/tmux"
 	"github.com/anthropics/ai-party/tools/party-cli/internal/tui"
@@ -927,7 +928,7 @@ func TestFormatEntries_MasterUsesGoldDot(t *testing.T) {
 	}
 	got := FormatEntries(entries)
 
-	goldANSI := "\033[38;2;255;215;0m"
+	goldANSI := palette.MasterRoleANSI
 	if !strings.Contains(got, goldANSI+"● ") {
 		t.Errorf("FormatEntries master entry should have gold dot, got:\n%s", got)
 	}
@@ -987,7 +988,7 @@ func TestFormatPreview_MasterUsesGoldANSI(t *testing.T) {
 	pd := &PreviewData{Status: "master", WorkerCount: 2, Cwd: "/tmp", Timestamp: "2026-03-10"}
 	got := FormatPreview(pd)
 
-	goldANSI := "\033[38;2;255;215;0m"
+	goldANSI := palette.MasterRoleANSI
 	if !strings.Contains(got, goldANSI) {
 		t.Errorf("FormatPreview master status should use Gold ANSI, got:\n%s", got)
 	}
