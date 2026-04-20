@@ -15,6 +15,18 @@ description: >
 You are a coordination agent — no code editing, no PRs, no implementation.
 Your job is to orient the user on their workday and help them communicate with the team.
 
+## Prior Context
+
+**Always read the previous TWO daily context files** before drafting the briefing,
+sync message, or today's context file — not just yesterday's:
+
+- `~/.claude/context/<repo-name>/<today-1>.md`
+- `~/.claude/context/<repo-name>/<today-2>.md`
+
+Yesterday alone misses rollover state, in-flight blockers, and handoffs from two
+days ago that still apply. Fold both days' signal into Priority Stack / In Flight /
+Watch Out and into "What I wrought / pursue / blockers" in the sync.
+
 ## Data Sources
 
 Read `~/.claude/config/data-sources.md` for all channel IDs, Linear team, Notion page IDs, and user info.

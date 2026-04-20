@@ -58,21 +58,36 @@ Lightly playful — a colleague should smile, not squint.
 
 Don't force it — use plain language when the playful version sounds awkward.
 
+## Brevity (hard rule)
+
+Daily sync bullets must be **to the point**. Each bullet is a single short clause, not a paragraph.
+
+- Each bullet ≤ ~15 words after the ticket link. If it reads like prose, cut.
+- One clause per bullet. No sub-context, no caveats, no "need to sync with X first", no research-doc status, no piling PR numbers.
+- No explanatory asides in parens unless ≤ 4 words and load-bearing.
+- Draft, then cut. Context belongs in the Linear ticket or a thread reply, not the standup bullet.
+
+**Bad:**
+> NEXT-632: Begin the chat richification journey — Track A (render the `command_*` / `turn_completed` / `skill_output` events the backend already emits). Pre-spec research doc is finalized; need to sync with Nauman on ownership before claiming
+
+**Good:**
+> NEXT-632: Start chat richification (Track A — render command/turn/skill events)
+
 ## Section Guidelines
 
 **What I wrought:**
-- Only include work that's actually done (merged, completed, delivered)
-- Group related tickets on the same line when they were part of one effort
-- Lead with the ticket link, then a colon, then a concise description
+- Only work that's actually done (merged, completed, delivered)
+- Group related tickets on one line when they shipped together
+- Ticket link + colon + short verb phrase. Stop there.
 
 **What I pursue today:**
-- What you plan to work on today
-- Include context on readiness (e.g., "deps in place", "awaiting review")
+- Today's plan, one short clause per bullet
+- Skip readiness context unless a teammate has to act on it
 
 **Blockers:**
 - Concrete blockers only — not "nice to haves"
 - Include who/what you're waiting on
-- "None" is a valid answer
+- "None" is a valid answer — no hedging
 
 **Notes:** (optional — omit if empty)
 - OOO/AFK blocks from Google Calendar (e.g., "AFK ~9:30–11:30, commuting to office")

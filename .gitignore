@@ -11,3 +11,4 @@ codex/installation_id
 
 # Go build artifacts
 tools/party-cli/party-cli
+tools/party-tracker/party-tracker

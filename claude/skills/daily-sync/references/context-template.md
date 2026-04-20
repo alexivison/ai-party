@@ -13,6 +13,10 @@ Shared format for the daily context file written by `/daily-sync` and
 
 ## Rules
 
+- **Read the previous TWO context files before writing today's** —
+  `<today-1>.md` AND `<today-2>.md`. Yesterday alone misses rollover state,
+  in-flight blockers, and handoffs from two days ago. Fold both days' still-
+  relevant signal into today's Priority Stack / In Flight / Watch Out.
 - **Overwrite** if today's file already exists (e.g., radar after sync, or
   mid-day re-runs).
 - **Target ~10-20 lines / ~250 tokens.** Hard cap at 30 lines. Injected into
