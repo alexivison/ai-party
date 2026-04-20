@@ -83,7 +83,7 @@ func (f *fakeActions) ManifestJSON(sessionID string) (string, error) {
 }
 
 func snapshotFetcher(snapshot TrackerSnapshot) SessionFetcher {
-	return func(SessionInfo, string) (TrackerSnapshot, error) {
+	return func(SessionInfo) (TrackerSnapshot, error) {
 		return snapshot, nil
 	}
 }
@@ -549,5 +549,65 @@ func TestTrackerViewShowsCurrentIndicator(t *testing.T) {
 	styled := currentSessionTitleStyle.Render("current")
 	if !strings.Contains(view, styled) {
 		t.Fatalf("expected current-session title styled with accent color, got:\n%s", view)
+	}
+}
+
+func TestTrackerSnippetDeltaTurnsDotOffForSameSnippet(t *testing.T) {
+	t.Parallel()
+
+	tm := NewTrackerModel(SessionInfo{ID: "party-current"}, nil, &fakeActions{})
+	tm.applySnapshot(TrackerSnapshot{
+		Sessions: []SessionRow{{ID: "party-current", Status: "active", SessionType: "standalone", Snippet: "⏺ still working"}},
+	})
+	tm.applySnapshot(TrackerSnapshot{
+		Sessions: []SessionRow{{ID: "party-current", Status: "active", SessionType: "standalone", Snippet: "⏺ still working"}},
+	})
+
+	row, ok := tm.selectedSession()
+	if !ok {
+		t.Fatal("expected selected session")
+	}
+	if row.PrimaryActive {
+		t.Fatal("expected unchanged snippet to keep activity dot off")
+	}
+}
+
+func TestTrackerSnippetDeltaTurnsDotOnForChangedSnippet(t *testing.T) {
+	t.Parallel()
+
+	tm := NewTrackerModel(SessionInfo{ID: "party-current"}, nil, &fakeActions{})
+	tm.applySnapshot(TrackerSnapshot{
+		Sessions: []SessionRow{{ID: "party-current", Status: "active", SessionType: "standalone", Snippet: "⏺ still working"}},
+	})
+	tm.applySnapshot(TrackerSnapshot{
+		Sessions: []SessionRow{{ID: "party-current", Status: "active", SessionType: "standalone", Snippet: "⏺ moved on"}},
+	})
+
+	row, ok := tm.selectedSession()
+	if !ok {
+		t.Fatal("expected selected session")
+	}
+	if !row.PrimaryActive {
+		t.Fatal("expected changed snippet to mark the row active")
+	}
+}
+
+func TestTrackerSnippetDeltaKeepsEmptySnippetOff(t *testing.T) {
+	t.Parallel()
+
+	tm := NewTrackerModel(SessionInfo{ID: "party-current"}, nil, &fakeActions{})
+	tm.applySnapshot(TrackerSnapshot{
+		Sessions: []SessionRow{{ID: "party-current", Status: "active", SessionType: "standalone", Snippet: "⏺ still working"}},
+	})
+	tm.applySnapshot(TrackerSnapshot{
+		Sessions: []SessionRow{{ID: "party-current", Status: "active", SessionType: "standalone", Snippet: ""}},
+	})
+
+	row, ok := tm.selectedSession()
+	if !ok {
+		t.Fatal("expected selected session")
+	}
+	if row.PrimaryActive {
+		t.Fatal("expected empty snippet to keep activity dot off")
 	}
 }

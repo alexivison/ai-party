@@ -107,7 +107,7 @@ func TestModelSessionUpdateSchedulesSnapshotWithoutBlocking(t *testing.T) {
 	release := make(chan struct{})
 
 	m := NewModelWithResolver(stubResolver(current))
-	m.tracker = NewTrackerModel(current, func(SessionInfo, string) (TrackerSnapshot, error) {
+	m.tracker = NewTrackerModel(current, func(SessionInfo) (TrackerSnapshot, error) {
 		started <- struct{}{}
 		<-release
 		return TrackerSnapshot{

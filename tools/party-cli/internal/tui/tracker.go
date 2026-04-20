@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"strings"
 	"time"
@@ -28,24 +29,22 @@ const (
 
 // SessionRow is the display-ready session data for the tracker.
 //
-// PrimaryActive / CompanionActive are derived from the mtime of each
-// agent's live session transcript (see agent.Agent.TranscriptPath). A
-// transcript modified within transcriptActivityWindow counts as "agent
-// currently generating" and drives the blinking activity dot.
+// PrimaryActive is derived from snippet delta across refreshes: when the
+// primary snippet changes between snapshots, the activity dot blinks for
+// that tick. Companion output is not captured for dot purposes.
 type SessionRow struct {
-	ID              string
-	Title           string
-	Cwd             string
-	PrimaryAgent    string
-	Status          string // "active" or "stopped"
-	SessionType     string // "master", "worker", or "standalone"
-	ParentID        string
-	WorkerCount     int
-	HasCompanion    bool
-	Snippet         string
-	PrimaryActive   bool
-	CompanionActive bool
-	IsCurrent       bool
+	ID            string
+	Title         string
+	Cwd           string
+	PrimaryAgent  string
+	Status        string // "active" or "stopped"
+	SessionType   string // "master", "worker", or "standalone"
+	ParentID      string
+	WorkerCount   int
+	HasCompanion  bool
+	Snippet       string
+	PrimaryActive bool
+	IsCurrent     bool
 }
 
 // TrackerSnapshot is the full rendered data set for one refresh tick.
@@ -67,7 +66,7 @@ type CurrentSessionDetail struct {
 }
 
 // SessionFetcher loads all session data for the tracker.
-type SessionFetcher func(current SessionInfo, selectedID string) (TrackerSnapshot, error)
+type SessionFetcher func(current SessionInfo) (TrackerSnapshot, error)
 
 // snapshotMsg carries an asynchronously fetched tracker snapshot back to Update.
 type snapshotMsg struct {
@@ -91,6 +90,7 @@ type TrackerModel struct {
 	refreshing    bool
 	refreshQueued bool
 	refreshSeq    int
+	snippetHashes map[string]uint64
 
 	manifestJSON string
 	manifestID   string
@@ -136,31 +136,17 @@ func (tm *TrackerModel) requestRefresh() tea.Cmd {
 
 	seq := tm.refreshSeq
 	current := tm.current
-	selectedID := tm.selectedSessionID()
-	if selectedID == "" {
-		selectedID = tm.current.ID
-	}
 	fetcher := tm.fetcher
 
 	return func() tea.Msg {
-		snapshot, err := fetcher(current, selectedID)
+		snapshot, err := fetcher(current)
 		return snapshotMsg{seq: seq, snapshot: snapshot, err: err}
 	}
 }
 
 func (tm *TrackerModel) applySnapshot(snapshot TrackerSnapshot) {
 	selectedID := tm.selectedSessionID()
-	previousSnippets := make(map[string]string, len(tm.sessions))
-	for _, row := range tm.sessions {
-		if row.Snippet != "" {
-			previousSnippets[row.ID] = row.Snippet
-		}
-	}
-	for i := range snapshot.Sessions {
-		if snapshot.Sessions[i].Snippet == "" {
-			snapshot.Sessions[i].Snippet = previousSnippets[snapshot.Sessions[i].ID]
-		}
-	}
+	tm.updateSnippetActivity(snapshot.Sessions)
 
 	tm.sessions = snapshot.Sessions
 	tm.detail = snapshot.Current
@@ -179,6 +165,35 @@ func (tm *TrackerModel) applySnapshot(snapshot TrackerSnapshot) {
 	if tm.cursor >= len(tm.sessions) {
 		tm.cursor = max(0, len(tm.sessions)-1)
 	}
+}
+
+func (tm *TrackerModel) updateSnippetActivity(rows []SessionRow) {
+	if tm.snippetHashes == nil {
+		tm.snippetHashes = make(map[string]uint64)
+	}
+
+	nextHashes := make(map[string]uint64, len(rows))
+	for i := range rows {
+		row := &rows[i]
+		if row.Status != "active" {
+			row.PrimaryActive = false
+			continue
+		}
+
+		key := snippetHashKey(row.ID, "primary")
+		hash := hashSnippet(row.Snippet)
+		nextHashes[key] = hash
+
+		if strings.TrimSpace(row.Snippet) == "" {
+			row.PrimaryActive = false
+			continue
+		}
+
+		prevHash, ok := tm.snippetHashes[key]
+		row.PrimaryActive = ok && prevHash != hash
+	}
+
+	tm.snippetHashes = nextHashes
 }
 
 func (tm *TrackerModel) finishRefresh(msg snapshotMsg) tea.Cmd {
@@ -227,13 +242,11 @@ func (tm TrackerModel) updateNormal(msg tea.KeyMsg) (TrackerModel, tea.Cmd) {
 	case "j", "down":
 		if tm.cursor < len(tm.sessions)-1 {
 			tm.cursor++
-			return tm, tm.requestRefresh()
 		}
 
 	case "k", "up":
 		if tm.cursor > 0 {
 			tm.cursor--
-			return tm, tm.requestRefresh()
 		}
 
 	case "enter":
@@ -529,12 +542,9 @@ func identityStyle(sessionType string) lipgloss.Style {
 	}
 }
 
-// isGenerating reports whether either the primary or companion agent is
-// currently producing output. Detection is based on recent mtime of each
-// agent's session transcript JSONL — see agent.Agent.TranscriptPath and
-// the fetcher's transcriptActive().
+// isGenerating reports whether the primary snippet changed on the latest tick.
 func (s SessionRow) isGenerating() bool {
-	return s.Status == "active" && (s.PrimaryActive || s.CompanionActive)
+	return s.Status == "active" && s.PrimaryActive
 }
 
 // workerIndent is the horizontal offset applied to worker session boxes so
@@ -952,4 +962,14 @@ func sessionTitleIcon(agentName string) string {
 
 func delayedRefreshCmd() tea.Cmd {
 	return tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg { return refreshMsg{} })
+}
+
+func snippetHashKey(sessionID, role string) string {
+	return sessionID + "\x00" + role
+}
+
+func hashSnippet(snippet string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(snippet))
+	return h.Sum64()
 }
