@@ -243,7 +243,7 @@ When a worker completes and opens a PR:
 3. **If CI fails**: read the failure logs, diagnose the issue, and relay fix
    instructions to the worker via `party-cli relay` with file paths, line
    numbers, and root cause analysis
-4. **Run `/code-review`** on the PR diff for a structured quality review
+4. **Run `/companion-review`** on the PR diff for a structured quality review
 5. **If blocking issues found**: relay the findings to the worker with file
    paths and line numbers so they can fix without re-investigating. Wait for
    the worker to push fixes and re-review.

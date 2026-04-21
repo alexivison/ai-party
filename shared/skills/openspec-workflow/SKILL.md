@@ -13,9 +13,9 @@ user-invocable: true
 # OpenSpec Workflow
 
 Two-phase workflow for repos where CI-based review bots replace the local
-review cascade. The PR gate runs in `ci-gate` tier (pr-verified +
-test-runner + check-runner only) — the hook assigns this automatically
-when this skill is invoked.
+review cascade. Invoking this skill opts the session into the `spec`
+execution-preset — the PR gate then requires only `pr-verified` evidence,
+leaving test/check/review enforcement to CI.
 
 ## Modes
 

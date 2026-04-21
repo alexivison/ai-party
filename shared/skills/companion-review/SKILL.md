@@ -1,22 +1,28 @@
 ---
-name: code-review
+name: companion-review
 description: >-
-  Review code for correctness, bugs, and guideline compliance. Produces a
-  structured report with severity-labeled findings ([must]/[q]/[nit]) and a
-  verdict. Loaded by the code-critic agent for SRP, DRY, and correctness checks.
-  Locality, simplicity, and bloat are handled by the minimizer agent separately.
+  Dispatch the configured companion agent to review the current changes for
+  correctness, bugs, and guideline compliance, and record the verdict. Produces
+  a structured report with severity-labeled findings ([must]/[q]/[nit]) and a
+  single APPROVE/REQUEST_CHANGES/NEEDS_DISCUSSION verdict. Also loaded by the
+  code-critic agent for SRP, DRY, and correctness checks. Locality, simplicity,
+  and bloat are handled by the minimizer agent separately.
 user-invocable: false
 allowed-tools: Read, Grep, Glob, Bash(git:*)
 ---
 
-# Code Review — Correctness
+# Companion Review — Correctness
 
 Review the current changes for correctness, bugs, and structural quality. Identify issues only — don't implement fixes.
 
+Workflows invoke this skill to dispatch the configured companion and record its approval. When reviewing locally, follow the same contract: gather evidence, apply the principles below, and emit a verdict using the output format at the bottom.
+
 ## Reference Documentation
 
-- **General**: `~/.claude/skills/code-review/reference/general.md` — SRP, DRY, thresholds, quality checklist
-- **Frontend**: `~/.claude/skills/code-review/reference/frontend.md` — React, TypeScript, CSS, testing patterns
+Reference files live under this skill's `reference/` directory, accessible via your agent-local symlink (e.g. `~/.claude/skills/companion-review/reference/...` or `~/.codex/skills/companion-review/reference/...`):
+
+- **General**: `companion-review/reference/general.md` — SRP, DRY, thresholds, quality checklist
+- **Frontend**: `companion-review/reference/frontend.md` — React, TypeScript, CSS, testing patterns
 
 Load relevant reference docs based on what's being reviewed.
 
@@ -27,7 +33,7 @@ Load relevant reference docs based on what's being reviewed.
 
 Locality (LoB), simplicity (KISS), and bloat (YAGNI) are the minimizer's domain. Do not duplicate that work.
 
-Severity labels (`[must]`/`[q]`/`[nit]`) and verdicts: see `~/.claude/reference/severity-verdict.md`.
+Severity labels (`[must]`/`[q]`/`[nit]`) and verdicts: see `shared/reference/severity-verdict.md`.
 
 ## Process
 

@@ -15,10 +15,10 @@ Write appropriate tests based on code characteristics and Testing Trophy princip
 
 ## Reference Documentation
 
-Load ONLY the relevant reference based on the files being tested:
+Load ONLY the relevant reference based on the files being tested. Use the agent-local symlink to this shared skill (e.g. `~/.claude/skills/write-tests/...` or `~/.codex/skills/write-tests/...`) — the reference files live alongside this SKILL.md under `reference/`:
 
-- **Frontend (TypeScript/React)**: `~/.claude/skills/write-tests/reference/frontend/testing-reference.md`
-- **Backend (Go)**: `~/.claude/skills/write-tests/reference/backend/testing-reference.md`
+- **Frontend (TypeScript/React)**: `write-tests/reference/frontend/testing-reference.md`
+- **Backend (Go)**: `write-tests/reference/backend/testing-reference.md`
 
 Do NOT load both. If testing `.ts`/`.tsx`/`.jsx` files → frontend. If testing `.go` files → backend. For mixed PRs, load each as needed when writing that language's tests.
 
@@ -54,21 +54,21 @@ Cover the **happy path + each distinct error/rejection path + boundary cases for
 
 ## Running Tests
 
-**Always use test-runner agent** for running tests (both RED and GREEN phases).
+Run tests through your agent's verification mechanism (both RED and GREEN phases). See the "Stage Bindings" section in your top-level agent doc (`claude/CLAUDE.md` or `codex/AGENTS.md`) for how `write-tests` maps to your concrete runner.
 
-Why:
-- Preserves main context (isolates verbose test output)
-- Returns concise summary
-- Consistent approach across all test runs
+Why the indirection:
+- Preserves main context (verbose output is isolated)
+- Returns a concise summary
+- Consistent behavior across runs and agents
 
-If you need detailed failure output (e.g., to verify RED fails for the right reason), check the test-runner summary first. Only re-run specific tests directly via Bash if the summary is insufficient.
+If you need detailed failure output (e.g., to verify RED fails for the right reason), check the runner summary first. Only re-run specific tests directly if the summary is insufficient.
 
 ## RED Phase
 
 When writing tests for new functionality:
 
 1. **Write the test first** — before implementation
-2. **Run via test-runner agent** and watch it FAIL
+2. **Run via your verification mechanism** and watch it FAIL
 3. **Verify it fails for the RIGHT reason:**
    - Good: "Expected X but received undefined" (feature missing)
    - Bad: "Cannot find module" (syntax/import error)

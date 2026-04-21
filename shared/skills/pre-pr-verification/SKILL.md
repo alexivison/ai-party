@@ -2,10 +2,10 @@
 name: pre-pr-verification
 description: >-
   Run full verification (typecheck, lint, tests) before creating a PR. Enforces
-  evidence-based completion with parallel sub-agent execution (test-runner +
-  check-runner). Use before any PR creation, when asked to verify changes, check
-  everything passes, or as the final gate before committing. Captures verification
-  evidence for the PR description.
+  evidence-based completion by exercising your agent's verification mechanism
+  for both tests and checks. Use before any PR creation, when asked to verify
+  changes, check everything passes, or as the final gate before committing.
+  Captures verification evidence for the PR description.
 user-invocable: false
 allowed-tools: Bash, Task
 ---
@@ -30,18 +30,15 @@ Any edit (even a comment fix) after verification passes also invalidates evidenc
 
 ## Process
 
-### Step 1 — DO THIS NOW: Dispatch Sub-Agents in Parallel
+### Step 1 — DO THIS NOW: Run Your Full Verification
 
-Launch **test-runner** and **check-runner** in the **same message** using the Task tool — not sequentially. This is the primary action of this skill; everything else supports it.
+Run both the test suite and the static checks (typecheck, lint). This is the primary action of this skill; everything else supports it.
 
-```
-Task(test-runner, …)  ←┐  same message, parallel dispatch
-Task(check-runner, …) ←┘
-```
+Your top-level agent doc binds `pre-pr-verification` to a concrete mechanism (see "Stage Bindings" in `claude/CLAUDE.md` or `codex/AGENTS.md`). Dispatch both halves in parallel whenever the mechanism supports it so the verification finishes in a single round.
 
-Wait for both to complete, then review their summaries. Sub-agents auto-discover the project's test/lint/typecheck commands — no need to pre-identify them.
+The mechanism must auto-discover the repo's test, lint, and typecheck commands — no need to pre-identify them. Wait for both halves to finish, then review the summaries.
 
-**If you need more detail:** re-run the specific failing test/check in main context to see full output.
+**If you need more detail:** re-run the specific failing test/check directly to see full output.
 
 ### Step 2: Handle Failures
 

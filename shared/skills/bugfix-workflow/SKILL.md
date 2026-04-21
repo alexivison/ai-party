@@ -32,8 +32,9 @@ Investigation agents ALWAYS require user review before proceeding.
 
 ## Execution Flow
 
-Use the canonical sequence in [execution-core.md](~/.claude/rules/execution-core.md#core-sequence),
-then apply these bugfix deltas from [task-workflow/SKILL.md](../task-workflow/SKILL.md):
+Invoking this skill opts the session into the `bugfix` execution-preset. The PR gate then requires critics + companion review + pre-pr-verification evidence (no requirements-auditor, unlike the task preset).
+
+Use the canonical sequence in `shared/execution-core.md` (section "Core Sequence"), then apply these bugfix deltas from `shared/skills/task-workflow/SKILL.md`:
 - Step 1: Regression test (not feature test) — must FAIL first (RED), then PASS after fix (GREEN)
 - Fix must address root cause (not just mask symptoms)
 - No checkbox step
@@ -41,9 +42,9 @@ then apply these bugfix deltas from [task-workflow/SKILL.md](../task-workflow/SK
 ## Regression Test First
 
 1. Write a test that reproduces the bug → invoke `/write-tests`
-2. Run via test-runner — it should FAIL (RED)
+2. Run via your verification mechanism — it should FAIL (RED)
 3. Fix the bug
-4. Run test-runner again — it should PASS (GREEN)
+4. Run the verification again — it should PASS (GREEN)
 
 ## Companion Investigation
 
@@ -62,4 +63,4 @@ Trace data/control flow, identify root cause with file:line, specify fix (don't 
 
 ## Core Reference
 
-See [execution-core.md](~/.claude/rules/execution-core.md) for review governance, decision matrix, and verification requirements.
+See `shared/execution-core.md` for review governance, decision matrix, and verification requirements.

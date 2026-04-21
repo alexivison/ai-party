@@ -4,7 +4,7 @@ This reference is loaded by the **code-critic** agent. It covers SRP, DRY, and c
 
 ---
 
-Severity labels and verdicts: see `~/.claude/reference/severity-verdict.md`.
+Severity labels and verdicts: see `shared/reference/severity-verdict.md`.
 
 ---
 
