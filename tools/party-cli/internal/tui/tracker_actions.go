@@ -243,6 +243,7 @@ type claudeTodoCacheEntry struct {
 	mtimeUnixNano int64
 	state         claudetodos.State
 	valid         bool
+	populated     bool // distinguishes "never seen" from "seen with mtime 0"
 }
 
 func newClaudeTodoCache() *claudeTodoCache {
@@ -274,7 +275,7 @@ func (c *claudeTodoCache) Fetch(baseDir, sessionID string) (claudetodos.State, b
 	}
 
 	mtime := fi.ModTime().UnixNano()
-	if entry.mtimeUnixNano != mtime {
+	if !entry.populated || entry.mtimeUnixNano != mtime {
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			// Transient read failure (e.g. file vanished between stat
@@ -293,6 +294,7 @@ func (c *claudeTodoCache) Fetch(baseDir, sessionID string) (claudetodos.State, b
 		// mtime bump below defers the next re-read until the writer
 		// finishes.
 		entry.mtimeUnixNano = mtime
+		entry.populated = true
 		c.entries[sessionID] = entry
 	}
 
