@@ -46,6 +46,7 @@ Invoke a workflow skill when the request matches the preset:
 - **OpenSpec repos with CI review bots** → `/openspec-workflow`
 
 Each workflow skill writes an `execution-preset` marker via `skill-marker.sh`. That marker is what makes the PR gate enforce the preset's evidence set. See `shared/execution-core.md § Opt-In Presets` for the preset-to-evidence mapping.
+Claude-specific hook paths, evidence storage, override knobs, and review metrics live in `claude/rules/execution-core-claude-internals.md`.
 
 When a workflow is active, **do NOT stop between steps.** Follow `shared/execution-core.md` for sequence, gates, decision matrix, and pause conditions. Companion review is NEVER a pause condition or skippable — see execution-core § Review Governance.
 

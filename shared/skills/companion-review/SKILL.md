@@ -8,7 +8,6 @@ description: >-
   code-critic agent for SRP, DRY, and correctness checks. Locality, simplicity,
   and bloat are handled by the minimizer agent separately.
 user-invocable: false
-allowed-tools: Read, Grep, Glob, Bash(git:*)
 ---
 
 # Companion Review — Correctness

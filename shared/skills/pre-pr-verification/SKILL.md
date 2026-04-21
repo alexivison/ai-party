@@ -3,11 +3,11 @@ name: pre-pr-verification
 description: >-
   Run full verification (typecheck, lint, tests) before creating a PR. Enforces
   evidence-based completion by exercising your agent's verification mechanism
-  for both tests and checks. Use before any PR creation, when asked to verify
-  changes, check everything passes, or as the final gate before committing.
+  for both tests and checks. Use after the commit you intend to push or open in
+  a PR, when asked to verify changes, or when checking everything passes before
+  updating a PR.
   Captures verification evidence for the PR description.
 user-invocable: false
-allowed-tools: Bash, Task
 ---
 
 # Pre-PR Verification
@@ -87,4 +87,4 @@ If you catch yourself thinking:
 
 ## Only After Passing
 
-Create PR: `gh pr create --draft`
+Create or update the PR.

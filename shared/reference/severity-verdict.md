@@ -20,7 +20,9 @@
 
 requirements-auditor and deep-reviewer use only APPROVE / REQUEST_CHANGES (no NEEDS_DISCUSSION).
 
-In Codex findings files, verdicts appear as `VERDICT: APPROVED` / `VERDICT: REQUEST_CHANGES`.
+Human prose uses `APPROVE / REQUEST_CHANGES / NEEDS_DISCUSSION`. Inter-agent findings files use `VERDICT: APPROVED` / `VERDICT: REQUEST_CHANGES`.
+
+Mapping: `APPROVE` in prose corresponds to `VERDICT: APPROVED` in a findings file. Use the `VERDICT:` spelling only inside machine-read findings files.
 
 ## Default Suppression
 

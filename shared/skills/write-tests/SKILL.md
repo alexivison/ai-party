@@ -54,21 +54,16 @@ Cover the **happy path + each distinct error/rejection path + boundary cases for
 
 ## Running Tests
 
-Run tests through your agent's verification mechanism (both RED and GREEN phases). See the "Stage Bindings" section in your top-level agent doc (`claude/CLAUDE.md` or `codex/AGENTS.md`) for how `write-tests` maps to your concrete runner.
+Run the relevant test target using your agent's `write-tests` binding (see the "Stage Bindings" section in your top-level agent doc, such as `claude/CLAUDE.md` or `codex/AGENTS.md`). The important part is simple: observe a meaningful RED failure, then rerun the same target until it turns GREEN.
 
-Why the indirection:
-- Preserves main context (verbose output is isolated)
-- Returns a concise summary
-- Consistent behavior across runs and agents
-
-If you need detailed failure output (e.g., to verify RED fails for the right reason), check the runner summary first. Only re-run specific tests directly if the summary is insufficient.
+If the first run fails for the wrong reason (syntax error, missing import, broken setup), fix that noise or narrow the command until the failure actually represents the missing behavior.
 
 ## RED Phase
 
 When writing tests for new functionality:
 
 1. **Write the test first** — before implementation
-2. **Run via your verification mechanism** and watch it FAIL
+2. **Run it** and watch it FAIL
 3. **Verify it fails for the RIGHT reason:**
    - Good: "Expected X but received undefined" (feature missing)
    - Bad: "Cannot find module" (syntax/import error)

@@ -5,6 +5,7 @@ set -euo pipefail
 MESSAGE="${1:?Usage: tmux-primary.sh \"message for the primary agent\"}"
 
 SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_AGENT_NAME="$(basename "$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")")"
 source "$SCRIPT_DIR/../../../../session/party-lib.sh"
 discover_session
 
@@ -25,7 +26,8 @@ augment_primary_request() {
     return
   fi
 
-  local notify_script="$HOME/.codex/skills/agent-transport/scripts/tmux-primary.sh"
+  local notify_script
+  notify_script="$(party_transport_notify_script_for_role "$SESSION_NAME" "companion" "$LOCAL_AGENT_NAME")"
   local handoff_instruction
   handoff_instruction="$(party_transport_response_handoff_instruction "$notify_script" "$response_path")"
   printf '%s — %s\n' "$message" "$handoff_instruction"

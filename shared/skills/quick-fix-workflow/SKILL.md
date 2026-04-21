@@ -10,13 +10,17 @@ user-invocable: true
 
 # Quick Fix Workflow
 
-Lightweight workflow for small or straightforward changes. Invoking this skill opts the session into the `quick` execution-preset. The PR gate then requires `code-critic` + `pr-verified` + `test-runner` + `check-runner` — no minimizer, no companion review.
+Lightweight workflow for small or straightforward changes. Invoking this skill selects the `quick` execution preset. That preset requires `code-critic` + `pr-verified` + `test-runner` + `check-runner` — no minimizer, no companion review.
+
+## Enforcement
+
+On Claude, invoking this skill writes the `quick` execution-preset via `skill-marker.sh`, so `pr-gate.sh` enforces the quick evidence set. On Codex, there is no local preset hook, so the same sequence and evidence list are self-enforced from `codex/AGENTS.md`.
 
 ## Scope Guidance
 
 Use this workflow when speed matters and the requested change seems contained. There is no category whitelist or hard size rejection in this skill.
 
-- Quick preset evidence is written automatically when this skill is invoked; no manual evidence writes are required.
+- On Claude, preset evidence wiring happens automatically when this skill is invoked. On Codex, there is no local marker hook, so follow the quick preset checklist manually.
 - Satisfy the quick preset gate with `code-critic`, `test-runner`, and `check-runner` (plus `pr-verified`).
 - If the work turns into deep debugging or broad planned implementation, switching to `bugfix-workflow` or `task-workflow` may still be the cleaner framing, but it is a judgment call rather than an enforced gate.
 
@@ -36,8 +40,9 @@ After passing the gate, execute continuously — **no stopping until PR is creat
 
 1. **Implement** the change
 2. **Run code-critic** — Single pass. Triage any blocking findings before proceeding.
-3. **Run the full verification** — tests and checks, per `/pre-pr-verification`
-4. **Commit & PR** — Create commit and draft PR
+3. **Commit** — Create the commit that the verification evidence will apply to
+4. **Run the full verification** — tests and checks, per `/pre-pr-verification`
+5. **PR** — Create or update the PR
 
 ## What This Workflow Optimizes
 

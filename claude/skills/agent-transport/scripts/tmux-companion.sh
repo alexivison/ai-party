@@ -5,6 +5,7 @@ set -euo pipefail
 MODE="${1:?Usage: tmux-companion.sh --review|--plan-review|--prompt|--review-complete|--needs-discussion}"
 
 SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_AGENT_NAME="$(basename "$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")")"
 # Templates live in shared/skills/agent-transport/templates/; scripts are
 # agent-local. From <repo>/<agent>/skills/agent-transport/scripts/ the shared
 # templates are four levels up and back down into shared/.
@@ -114,7 +115,7 @@ case "$MODE" in
     TITLE="${_review_positional[2]:-Code review}"
     FINDINGS_FILE="$STATE_DIR/companion-findings-$(date +%s%N).toon"
 
-    NOTIFY_SCRIPT="$HOME/.codex/skills/agent-transport/scripts/tmux-primary.sh"
+    NOTIFY_SCRIPT="$(party_transport_notify_script_for_role "$SESSION_NAME" "companion" "$LOCAL_AGENT_NAME")"
     NOTIFY_CMD="$NOTIFY_SCRIPT \"Review complete. Findings at: $FINDINGS_FILE\""
 
     # Build conditional sections (printf for real newlines)
@@ -166,7 +167,7 @@ case "$MODE" in
     WORK_DIR="${3:?Missing work_dir — pass the worktree/repo path as 3rd argument}"
     FINDINGS_FILE="$STATE_DIR/companion-plan-findings-$(date +%s%N).toon"
 
-    NOTIFY_SCRIPT="$HOME/.codex/skills/agent-transport/scripts/tmux-primary.sh"
+    NOTIFY_SCRIPT="$(party_transport_notify_script_for_role "$SESSION_NAME" "companion" "$LOCAL_AGENT_NAME")"
     NOTIFY_CMD="$NOTIFY_SCRIPT \"Plan review complete. Findings at: $FINDINGS_FILE\""
 
     MSG=$(_render_template "$TEMPLATE_DIR/plan-review.md" \
@@ -207,7 +208,7 @@ case "$MODE" in
 
     RESPONSE_FILE="$STATE_DIR/companion-response-$(date +%s%N).toon"
 
-    NOTIFY_SCRIPT="$HOME/.codex/skills/agent-transport/scripts/tmux-primary.sh"
+    NOTIFY_SCRIPT="$(party_transport_notify_script_for_role "$SESSION_NAME" "companion" "$LOCAL_AGENT_NAME")"
     HANDOFF_INSTRUCTION="$(party_transport_response_handoff_instruction "$NOTIFY_SCRIPT" "$RESPONSE_FILE")"
     MSG="$SENDER_PREFIX cd '$WORK_DIR' && $PROMPT_TEXT — Write response to: $RESPONSE_FILE — $HANDOFF_INSTRUCTION"
     RUNTIME_DIR="$(party_runtime_dir "$SESSION_NAME")"

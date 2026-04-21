@@ -13,7 +13,9 @@ user-invocable: true
 
 Execute planned work using the full autonomous pipeline defined in the shared execution-core rules at `shared/execution-core.md` (also accessible via agent-local shims such as `claude/rules/execution-core.md`).
 
-Invoking this skill opts the session into the `task` execution-preset — the PR gate will then require the full task-preset evidence set (critics, requirements-auditor, companion review, pre-pr-verification). See `shared/execution-core.md` for the preset-to-evidence mapping.
+## Enforcement
+
+On Claude, invoking this skill writes the `task` execution-preset via `skill-marker.sh`, so `pr-gate.sh` requires the full task-preset evidence set. On Codex, there is no local preset hook, so the same sequence and evidence list are self-enforced from `codex/AGENTS.md`.
 
 ## When to Use
 
@@ -29,11 +31,11 @@ For bug fixes → use `bugfix-workflow`. For non-behavioral small changes → us
 Task-workflow is a thin shim over execution-core. It triggers the full pipeline and ensures:
 
 1. **Scope extraction** — Read the planning source and extract scope boundaries, requirements, and goal per the pre-implementation gate in `shared/execution-core.md`.
-2. **Requirements audit** — Because planned work has requirements, the requirements-auditor runs alongside critics.
+2. **Requirements audit** — Because planned work has requirements, the critics stage is `code-critic + minimizer + requirements-auditor`.
 3. **Source-file updates** — Tracking files (TASK/PLAN/external checkboxes) are updated alongside the implementation commit.
 
 ## Execution
 
-Follow `shared/execution-core.md` end-to-end — pre-implementation gate, RED evidence, implementation, source-file updates, critics (with requirements-auditor), companion review, commit, pre-pr-verification, PR. No stopping until PR is created.
+Follow `shared/execution-core.md` end-to-end — pre-implementation gate, RED evidence, implementation, source-file updates, critics (`code-critic + minimizer + requirements-auditor`), companion review, commit, pre-pr-verification, PR. No stopping until PR is created.
 
 Concrete stage mechanisms come from your agent's "Stage Bindings" section (`claude/CLAUDE.md` or `codex/AGENTS.md`). This recipe describes the stages; the bindings describe how to execute them.

@@ -1,16 +1,16 @@
 # Execution Core
 
-Shared rules for all workflow skills. **Execution-core is opt-in** — the default session mode is direct editing with no PR gate enforcement. These rules activate when a workflow skill (`task-workflow`, `bugfix-workflow`, `quick-fix-workflow`, `openspec-workflow`) opts the session into an execution preset. Bugfix-workflow omits source-file updates (no tracking files).
+Shared rules for all workflow skills. **Execution-core is opt-in** — the default session mode is direct editing with no workflow enforcement. These rules activate when a workflow skill (`task-workflow`, `bugfix-workflow`, `quick-fix-workflow`, `openspec-workflow`) opts the session into an execution preset. On Claude, the preset is also recorded for hook enforcement. On Codex and other agents without Claude's hook chain, the same preset is self-enforced from the agent doc and workflow skill. Bugfix-workflow omits source-file updates (no tracking files).
 
 ## Core Sequence
 
 This section is the single source of truth for execution order across workflow docs.
 
 ```
-/write-tests → implement → source-file updates → [code-critic + minimizer] → companion review → /pre-pr-verification → commit → PR
+/write-tests → implement → source-file updates → [code-critic + minimizer (+ requirements-auditor for task)] → companion review → commit → /pre-pr-verification → PR
 ```
 
-Workflow skills enforce the critic-before-companion-review ordering. Hooks only record evidence and block self-approval — they do not gate sequencing.
+Workflow skills enforce the critic-before-companion-review ordering. Claude hooks only record evidence and block self-approval — they do not gate sequencing. Agents without those hooks must self-enforce the same sequencing.
 
 ## Pre-Implementation Gate
 
@@ -78,19 +78,13 @@ Create the commit before running `/pre-pr-verification`. The PR gate checks evid
 
 ## Evidence System
 
-Per-session JSONL log at `/tmp/claude-evidence-{session_id}.jsonl`. Each entry records a `diff_hash` (SHA-256 of branch diff from merge-base). Gates only accept evidence with matching hash — editing code auto-invalidates prior evidence.
+Evidence is always tied to the current committed `diff_hash`. Record which critics, companion review, and verification stages ran, together with their verdict/result, and treat any edit as stale evidence until those stages are re-run for the new hash.
 
-`companion-gate.sh` blocks only `--approve` (self-approval); all other default companion transport commands pass freely. Approval flows through `--review-complete`.
-
-**Oscillation detection** (`agent-trace-stop.sh`): Same-hash alternation (3 alternating verdicts → auto-triage-override). Cross-hash repeated findings (minimizer only, 3+ hashes → override; code-critic exempt).
-
-## Review Metrics
-
-Review metrics are Claude-hook specific. See `claude/reference/review-metrics.md` (installed at `~/.claude/reference/review-metrics.md`) for events, CLI commands, and querying. Metrics are written under `~/.claude/logs/review-metrics/` when Claude hooks are active.
+Agent-specific hook plumbing, log files, metrics, and override knobs belong in agent-local docs. For Claude's implementation details, see `claude/rules/execution-core-claude-internals.md`.
 
 ## Opt-In Presets
 
-Execution-core is **opt-in**. If no workflow skill is invoked, the session stays in direct-edit mode and the PR gate allows PR creation with no evidence. A workflow skill opts the session into a preset, which drives the PR gate evidence requirements.
+Execution-core is **opt-in**. If no workflow skill is invoked, the session stays in direct-edit mode. A workflow skill opts the session into a preset, which drives the expected evidence requirements. On Claude, that preset also drives `pr-gate.sh`. On Codex, there is no local preset marker, so treat this table as a required checklist.
 
 | Preset | Opt-in Skill | Sequence | Gate Evidence |
 |--------|--------------|----------|---------------|
@@ -100,9 +94,7 @@ Execution-core is **opt-in**. If no workflow skill is invoked, the session stays
 | **quick** | `quick-fix-workflow` | `implement → code-critic → commit → /pre-pr-verification → PR` | code-critic, pr-verified, test-runner, check-runner |
 | **spec** | `openspec-workflow` | `draft → CI spec-review → implement → CI ai-pr-review → PR` | pr-verified |
 
-`skill-marker.sh` writes `execution-preset = <name>` when a workflow skill is invoked. The evidence is hash-independent (session-level, not code-state). Later workflow invocations replace the preset (latest-entry-wins). The gate reads only the latest preset.
-
-Operators can override the preset requirements by setting `cfg.Evidence.Required` in `~/.config/party-cli/config.toml`; the gate uses that list directly when present.
+Claude writes `execution-preset = <name>` via `skill-marker.sh` when a workflow skill is invoked. Agents without Claude's hook chain do not write this marker locally; they still follow the same preset and evidence contract as self-enforced workflow rules.
 
 Spec-review checks: atomicity, normative language (SHALL/MUST), testable scenarios (GIVEN/WHEN/THEN), non-overlapping requirements. Plan-review checks: architecture coherence, feasibility, completeness. Both follow review governance rules.
 
@@ -137,11 +129,12 @@ Classify every finding before acting:
 | Critics | REQUEST_CHANGES (blocking) | Fix batch + one re-run |
 | Critics | Cap reached (2 passes) | Primary agent uses own judgment, proceed to companion review |
 | All critics pass | — | Run companion review |
-| Companion | APPROVE | /pre-pr-verification |
-| Companion | REQUEST_CHANGES (blocking) | Fix + commit + re-run critics + `--review` → `--review-complete`. **Repeat until APPROVED.** |
-| Companion | REQUEST_CHANGES (non-blocking) | Record, proceed to /pre-pr-verification |
+| Companion | APPROVE | Commit |
+| Companion | REQUEST_CHANGES (blocking) | Fix + re-run critics + `--review` → `--review-complete`. **Repeat until APPROVED.** |
+| Companion | REQUEST_CHANGES (non-blocking) | Record, proceed to commit |
 | Companion | Out-of-scope or NEEDS_DISCUSSION | Dispute per § Dispute Resolution. **No cap — continue until resolved.** |
 | Spec-review / Plan-review | Same pattern as critics | See § Opt-In Presets |
+| Commit | Done | /pre-pr-verification |
 | /pre-pr-verification | Pass/Fail | PR / fix |
 | Edit/Write after approval | Evidence stale | Re-run cascade |
 
@@ -169,7 +162,7 @@ Evidence before claims. No assertions without proof (test output, file:line, gre
 
 ## PR Gate
 
-`pr-gate.sh` is the single enforcement point. When no preset is set, it allows PR creation (opt-in default). When a preset is set, it requires the preset-specific evidence at the current diff_hash (see § Opt-In Presets for the preset-to-evidence mapping). Evidence is written by `agent-trace-stop.sh`, `companion-trace.sh`, `skill-marker.sh`, and workflow skills.
+On Claude, `pr-gate.sh` is the enforcement point. When no preset is set, it allows PR creation (opt-in default). When a preset is set, it requires the preset-specific evidence at the current diff_hash (see § Opt-In Presets for the preset-to-evidence mapping). Agents without the Claude hook chain do not run `pr-gate.sh`; they must self-enforce the same preset-specific checklist before PR or push.
 
 **Post-PR:** Changes in same branch → re-run /pre-pr-verification → amend + force-push with `--force-with-lease`.
 

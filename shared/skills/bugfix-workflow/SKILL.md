@@ -14,6 +14,10 @@ user-invocable: true
 
 Debug and fix bugs. Follows the same execution flow as task-workflow with these deltas.
 
+## Enforcement
+
+On Claude, invoking this skill writes the `bugfix` execution-preset via `skill-marker.sh`, so `pr-gate.sh` enforces the bugfix evidence set. On Codex, there is no local preset hook, so the same sequence and evidence list are self-enforced from `codex/AGENTS.md`.
+
 ## Deltas from Task Workflow
 
 - **No PLAN.md checkboxes** — bugfixes aren't planned work
@@ -32,7 +36,7 @@ Investigation agents ALWAYS require user review before proceeding.
 
 ## Execution Flow
 
-Invoking this skill opts the session into the `bugfix` execution-preset. The PR gate then requires critics + companion review + pre-pr-verification evidence (no requirements-auditor, unlike the task preset).
+Invoking this skill selects the `bugfix` execution preset. That preset requires `code-critic + minimizer + companion review + pre-pr-verification` evidence (no requirements-auditor, unlike the task preset).
 
 Use the canonical sequence in `shared/execution-core.md` (section "Core Sequence"), then apply these bugfix deltas from `shared/skills/task-workflow/SKILL.md`:
 - Step 1: Regression test (not feature test) — must FAIL first (RED), then PASS after fix (GREEN)
