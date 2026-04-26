@@ -75,7 +75,7 @@ Claude-specific sub-agents live under `claude/agents/`:
 
 Keep the main context clean. One task per sub-agent.
 
-Save investigation findings to `~/.claude/investigations/<issue-slug>.md`.
+Save research, investigation, design, and planning notes under `~/.ai-party/research/` using the storage contract in `~/.ai-party/research/CLAUDE.md`. Draft there by default, do not ask the user for a path, and do not create repo-local scratch docs unless the user explicitly asks for tracked artifacts.
 
 ## Inter-Agent Transport
 

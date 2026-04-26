@@ -1,5 +1,5 @@
 ## Task
-Create a PLAN.md for: <goal description>
+Create a planning bundle for: <goal description>
 
 ## Context
 <paste or summarize: ticket details, relevant code excerpts, existing architecture, constraints, user preferences>
@@ -9,15 +9,18 @@ Create a PLAN.md for: <goal description>
   - `plan.md` template for PLAN.md (checkbox-links, dependency graph, coverage matrix)
   - `task.md` template for each TASK*.md (scope boundary, reference, design refs, data transformation checklist, files, tests, acceptance criteria)
 - Create BOTH PLAN.md AND individual TASK*.md files
-- All artifacts in `docs/projects/<project-slug>/`:
+- Write scratch planning artifacts under `~/.ai-party/research/plans/<start-date>-<project-slug>/`:
   - `PLAN.md`, `SPEC.md`, `DESIGN.md`
   - `tasks/TASK<N>-<kebab-case-title>.md`
 - PLAN.md Tasks section: `- [ ] [Task 1](./tasks/TASK1-short-title.md) — Description (deps: none)`
+- These are agent working notes. Do NOT write them into the repo or ask the user for a save path unless the user explicitly requests tracked docs.
 - Keep it concise — a plan is a map, not a novel
 
 ## Output
-Write plan to: docs/projects/<project-slug>/PLAN.md
-Write tasks to: docs/projects/<project-slug>/tasks/TASK<N>-<kebab-case-title>.md
+Write plan to: ~/.ai-party/research/plans/<start-date>-<project-slug>/PLAN.md
+Write spec to: ~/.ai-party/research/plans/<start-date>-<project-slug>/SPEC.md
+Write design to: ~/.ai-party/research/plans/<start-date>-<project-slug>/DESIGN.md
+Write tasks to: ~/.ai-party/research/plans/<start-date>-<project-slug>/tasks/TASK<N>-<kebab-case-title>.md
 
 ## Response File Contract
 After writing all files, write summary to response file (<response_path>):

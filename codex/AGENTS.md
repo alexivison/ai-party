@@ -84,6 +84,8 @@ Use the role-aware transport scripts only; never raw tmux commands. As companion
 
 File-based handoff is the canonical channel for structured data. Always write output to the path the primary specified.
 
+Save research, investigation, design, and planning notes under `~/.ai-party/research/` using the storage contract in `~/.ai-party/research/AGENTS.md`. Draft there by default, do not ask the user for a path, and do not create repo-local scratch docs unless the user explicitly asks for tracked artifacts.
+
 ## Verification Principle
 
 Evidence before claims. No assertions without proof (file path, line number, command output). Code edits invalidate prior review results — rerun verification. Never mark analysis complete without proving claims. Ask: "Would a staff architect approve this?"

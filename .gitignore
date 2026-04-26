@@ -3,6 +3,18 @@
 blog/
 tmux-capture-*.txt
 
+# Scratch notes belong in ~/.ai-party/research/, not this repo
+/research/
+/investigations/
+/plans/
+/designs/
+/post-mortems/
+/docs/research/
+/docs/investigations/
+/docs/plans/
+/docs/designs/
+/docs/post-mortems/
+
 # Codex CLI runtime artifacts
 codex/.tmp/
 codex/cache/

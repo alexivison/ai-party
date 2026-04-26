@@ -2,14 +2,15 @@
 name: planning
 description: >
   Feature planning from discovery through task breakdown. Produces design docs
-  and implementation plans, then submits a draft PR for review. Use when asked
-  to plan a feature, create a design doc, break work into tasks, or produce
-  SPEC.md / DESIGN.md / PLAN.md / TASK files.
+  and implementation plans in `~/.ai-party/research/`, without pushing scratch
+  planning docs by default. Use when asked to plan a feature, create a design
+  doc, break work into tasks, or produce SPEC.md / DESIGN.md / PLAN.md /
+  TASK files.
 ---
 
 # Planning Skill
 
-Feature planning from discovery through task breakdown. Produces design docs and implementation plans, then submits a draft PR for Claude to review.
+Feature planning from discovery through task breakdown. Produces design docs and implementation plans in `~/.ai-party/research/` and keeps them out of git remotes by default.
 
 ## Modes
 
@@ -20,6 +21,15 @@ Feature planning from discovery through task breakdown. Produces design docs and
 | **Plan** | Break design into executable tasks | PLAN.md + TASK*.md |
 
 Start wherever the work requires. No hard entry gate — jump straight to Plan if the design is already clear.
+
+## Default Output Location
+
+Write scratch planning artifacts under `~/.ai-party/research/` per `~/.ai-party/research/AGENTS.md`.
+
+- Single-note discoveries or design drafts: `investigations/`, `designs/`, or `plans/` with filename `YYYY-MM-DD-<slug>.md`
+- Multi-file planning bundles: `plans/YYYY-MM-DD-<project-slug>/` containing `PLAN.md`, `SPEC.md`, `DESIGN.md`, and `tasks/TASK*.md`
+
+Do not ask the user for a save path unless they explicitly want repo-tracked artifacts.
 
 ## Readiness Gate (Before Plan Output)
 
@@ -53,11 +63,12 @@ If design decisions were made inline during planning, auto-materialise them into
 ## Plan Mode
 
 1. Read DESIGN.md and SPEC.md
-2. Create PLAN.md with task breakdown, dependencies, verification commands
-3. Create `tasks/TASK*.md` — small, independently executable tasks (~200 LOC each)
+2. Create or update the plan bundle at `~/.ai-party/research/plans/<YYYY-MM-DD-<project-slug>>/`
+3. Create PLAN.md with task breakdown, dependencies, verification commands
+4. Create `tasks/TASK*.md` — small, independently executable tasks (~200 LOC each)
    - For every task that creates or updates UI components, include a `Design References` section with at least one Figma node URL or image/screenshot link/path
-4. Evaluate against planning checks (see below)
-5. Refine until evaluation passes
+5. Evaluate against planning checks (see below)
+6. Refine until evaluation passes
 
 ## Planning Checks
 
@@ -71,7 +82,7 @@ If design decisions were made inline during planning, auto-materialise them into
 
 ## Self-Evaluation
 
-Before creating PR, record in PLAN.md:
+Before finalizing PLAN.md, record:
 
 ```
 ## Plan Evaluation Record
@@ -103,9 +114,9 @@ If FAIL: fix blocking gaps, re-evaluate.
 
 ## Output
 
-1. Create branch with `-plan` suffix (e.g., `ENG-123-feature-plan`)
-2. Submit draft docs-only PR containing SPEC.md, DESIGN.md, PLAN.md, TASK*.md
-3. Stop at PR — Claude reviews
+1. Write the approved planning bundle to `~/.ai-party/research/plans/<YYYY-MM-DD-<project-slug>>/`
+2. Stop once the external planning docs are ready
+3. Do not create a docs-only PR and do not commit or push scratch planning notes unless the user explicitly asks for repo-tracked artifacts
 
 ## Verification Principle
 

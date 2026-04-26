@@ -9,6 +9,7 @@ set -eo pipefail
 WEEKS_AGO=${1:-0}
 
 CLAUDE_DIR="$HOME/.claude"
+RESEARCH_DIR="$HOME/.ai-party/research"
 REPORTS_DIR="$HOME/Documents/Claude-Reports"
 HOME_ENCODED=$(echo "$HOME" | sed 's/\//-/g')
 GIT_AUTHOR=$(git config user.name 2>/dev/null || echo "")
@@ -36,11 +37,11 @@ echo "Output: $EXPORT_DIR"
 
 # ── Copy investigation markdown (skip operational logs) ─────────
 inv_files=()
-if [ -d "$CLAUDE_DIR/investigations" ]; then
+if [ -d "$RESEARCH_DIR/investigations" ]; then
   while IFS= read -r f; do
     inv_files+=("$f")
     cp "$f" "$EXPORT_DIR/"
-  done < <(find "$CLAUDE_DIR/investigations" -type f -name "*.md" -newermt "$SINCE" ! -newermt "$UNTIL" 2>/dev/null)
+  done < <(find "$RESEARCH_DIR/investigations" -type f -name "*.md" -newermt "$SINCE" ! -newermt "$UNTIL" 2>/dev/null)
   [ ${#inv_files[@]} -gt 0 ] && echo "  - Investigations: ${#inv_files[@]} file(s)"
 fi
 

@@ -95,7 +95,8 @@ Source reconciliation: [References or "None"]
 ## Notes
 
 - Target ~200 lines per task (standard) or 2-5 min steps (atomic)
-- All plan artifacts go in `docs/projects/<project-slug>/` (PLAN.md, SPEC.md, DESIGN.md, diagrams)
-- Task files go in `docs/projects/<project-slug>/tasks/` with naming: `TASK<N>-<kebab-case-title>.md`
+- Default bundle location: `~/.ai-party/research/plans/<YYYY-MM-DD-<project-slug>>/`
+- Keep `PLAN.md`, `SPEC.md`, `DESIGN.md`, and any `tasks/TASK*.md` files together in that bundle
+- These are scratch planning artifacts by default; do not commit or push them unless the user explicitly asks for repo-tracked docs
 - Use ASCII for dependency graph (not Mermaid)
 - Each task = one PR, independently mergeable
