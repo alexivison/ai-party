@@ -39,7 +39,7 @@ When a workflow is active, follow `shared/execution-core.md` end-to-end. The pre
 
 As the default companion, you typically run one of:
 
-- **Planning a feature** (design, breakdown, spec artifacts) → `planning` skill
+- **Planning a feature** (design, breakdown, spec artifacts) → `plan-workflow` skill
 - **Reviewing a primary-authored change** → respond per the incoming `[PRIMARY]` message via `tmux-handler`
 - **Investigation or delegated analysis** → answer the `--prompt` request, write the response file, notify the primary
 
@@ -110,7 +110,7 @@ After ANY correction from the user or the primary agent:
 
 ## Skills (Mandatory)
 
-- `planning` — use when asked to plan a feature, produce SPEC/DESIGN/PLAN/TASK docs, or break work into tasks.
+- `plan-workflow` — use when asked to plan a feature, produce SPEC/DESIGN/PLAN/TASK docs, or break work into tasks.
 - `tmux-handler` — use whenever a `[PRIMARY]` or `[COMPANION]` message appears in your pane.
 - `pr-descriptions` — use when writing or refining PR descriptions.
 

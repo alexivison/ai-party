@@ -89,4 +89,4 @@ Test cases:
 ## Notes
 
 - Keep tasks independently executable — include all context needed
-- **Scope validation**: Ensure task scope matches what dependent tasks expect
+- **Scope validation:** Ensure task scope matches what dependent tasks expect

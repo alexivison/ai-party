@@ -33,7 +33,7 @@ List existing patterns that this feature MUST follow. **Locations must include f
 
 Where new code will live:
 
-```
+```text
 src/
 ├── features/<name>/
 │   ├── components/
@@ -78,7 +78,7 @@ List ALL functions/methods that transform data. **Must include file:line referen
 
 **New fields must flow through ALL transformations for ALL code paths.**
 
-> **Silent drop check:** For each converter, verify: "If I add field X to input, will it appear in output?" If not, BUG.
+> **Silent drop check:** For each converter, verify: "If I add field X to input, will it appear in output?" If not, bug.
 
 ## Integration Points (REQUIRED)
 
@@ -93,19 +93,20 @@ List ALL functions/methods that transform data. **Must include file:line referen
 
 Define request/response schemas:
 
-```
+```text
 Request: { field: type, ... }
 Response: { field: type, ... }
 ```
 
 **Errors:**
+
 | Status | Code | Description |
 |--------|------|-------------|
 | 400 | `INVALID_INPUT` | ... |
 
 ## Design Decisions
 
-**Purpose:** Document WHY, not just WHAT.
+**Purpose:** Document why, not just what.
 
 | Decision | Rationale | Alternatives Considered |
 |----------|-----------|-------------------------|
