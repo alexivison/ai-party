@@ -47,5 +47,5 @@ One sentence describing what success looks like.
 
 ## Technical Reference
 
-For implementation details, see [DESIGN.md](./DESIGN.md).
+For implementation details, see [<design-filename>](./<design-filename>).
 ```
