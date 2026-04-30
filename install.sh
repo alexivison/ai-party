@@ -199,9 +199,13 @@ setup_claude() {
     fi
 
     if ! command -v claude &> /dev/null; then
-        prompt_install "claude" \
-            "curl -fsSL https://cli.anthropic.com/install.sh | sh" \
-            "curl installer (cli.anthropic.com)"
+        if command -v brew &> /dev/null; then
+            prompt_install "claude" \
+                "brew install --cask claude-code" \
+                "brew install --cask claude-code"
+        else
+            echo "⚠  Install Claude Code from your package manager or anthropic.com"
+        fi
     else
         echo "✓  claude CLI already installed"
     fi
